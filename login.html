@@ -14,38 +14,113 @@
     </div>
 
     <div class="card">
-      <h2>Connexion</h2>
+      <h2>Connexion Firebase</h2>
 
       <div class="row">
-        <input id="loginUsername" type="text" placeholder="Nom d'utilisateur">
+        <input id="email" type="email" placeholder="Email">
       </div>
 
-      <p id="pinDots" class="pin-display">• • • •</p>
-
-      <div class="pin-grid">
-        <button onclick="pressPin(1)">1</button>
-        <button onclick="pressPin(2)">2</button>
-        <button onclick="pressPin(3)">3</button>
-        <button onclick="pressPin(4)">4</button>
-        <button onclick="pressPin(5)">5</button>
-        <button onclick="pressPin(6)">6</button>
-        <button onclick="pressPin(7)">7</button>
-        <button onclick="pressPin(8)">8</button>
-        <button onclick="pressPin(9)">9</button>
-        <button class="secondary" onclick="clearPin()">⌫</button>
-        <button onclick="pressPin(0)">0</button>
-        <button class="secondary" onclick="clearPin()">Effacer</button>
+      <div class="row">
+        <input id="password" type="password" placeholder="Mot de passe">
       </div>
 
       <div class="row" style="margin-top:12px;">
-        <button onclick="loginUser()">Se connecter</button>
-        <button class="secondary" onclick="startCreateAccount()">Créer un compte</button>
+        <button id="registerBtn">Créer un compte</button>
+        <button class="secondary" id="loginBtn">Se connecter</button>
       </div>
 
-      <p class="small">Pour créer un compte : entre un nom, puis clique sur “Créer un compte”.</p>
+      <p class="small" id="statusMsg"></p>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module">
+    import { registerUser, loginUser } from "./auth.js";
+    import { createUserProfile } from "./db.js";
+
+    function generateFakeIban() {
+      const randomPart = Array.from({ length: 23 }, () => Math.floor(Math.random() * 10)).join("");
+      return "FR76" + randomPart;
+    }
+
+    function defaultAssets() {
+      return {
+        BTC: { price: 30000, owned: 0, avgBuyPrice: 0, history: [30000, 30120, 30050], transactions: [] },
+        ETH: { price: 2000, owned: 0, avgBuyPrice: 0, history: [2000, 2015, 1998], transactions: [] },
+        AAPL: { price: 180, owned: 0, avgBuyPrice: 0, history: [180, 181, 179], transactions: [] },
+        TSLA: { price: 250, owned: 0, avgBuyPrice: 0, history: [250, 248, 252], transactions: [] },
+        NVDA: { price: 500, owned: 0, avgBuyPrice: 0, history: [500, 506, 503], transactions: [] },
+        RCOP: { price: 5000, owned: 0, avgBuyPrice: 0, history: [5000, 5035, 4990], transactions: [] }
+      };
+    }
+
+    const statusMsg = document.getElementById("statusMsg");
+
+    document.getElementById("registerBtn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!email || !password) {
+        statusMsg.textContent = "Entre un email et un mot de passe.";
+        return;
+      }
+
+      try {
+        const cred = await registerUser(email, password);
+
+        await createUserProfile(cred.user.uid, {
+          email,
+          username: email.split("@")[0],
+          displayName: email.split("@")[0],
+          iban: generateFakeIban(),
+          isAdmin: false,
+          accounts: {
+            Principal: 0
+          },
+          activeAccount: "Principal",
+          clickValue: 1,
+          clickLevel: 1,
+          history: ["Compte créé avec succès"],
+          loans: [],
+          boost: {
+            doubleMoneyUntil: 0
+          },
+          contacts: [],
+          crypto: {
+            currentAsset: "BTC",
+            randomMode: true,
+            assets: defaultAssets()
+          },
+          card: {
+            blocked: false,
+            revealed: false,
+            type: "classic"
+          }
+        });
+
+        window.location.href = "home.html";
+      } catch (e) {
+        console.error(e);
+        statusMsg.textContent = `${e.code} — ${e.message}`;
+      }
+    });
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!email || !password) {
+        statusMsg.textContent = "Entre un email et un mot de passe";
+        return;
+      }
+
+      try {
+        await loginUser(email, password);
+        window.location.href = "home.html";
+      } catch (e) {
+        console.error(e);
+        statusMsg.textContent = `${e.code} — ${e.message}`;
+      }
+    });
+  </script>
 </body>
 </html>

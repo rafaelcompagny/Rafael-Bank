@@ -7,17 +7,26 @@
   <link rel="shortcut icon" href="img/logo.jpg">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-page="cards">
   <div class="container">
     <div class="topbar">
       <h2>Ma carte</h2>
       <div class="top-actions">
-        <a class="btn-link secondary" href="login.html" onclick="logout()">Se déconnecter</a>
+        <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
+      </div>
+    </div>
+
+    <div id="cardPinSetup" class="card" style="display:none; margin-bottom:16px;">
+      <h3>Configurer le code PIN de la carte</h3>
+      <p class="small">Choisis un code PIN à 4 chiffres pour protéger ta carte.</p>
+      <div class="row">
+        <input id="newCardPin" type="password" maxlength="4" placeholder="PIN 4 chiffres">
+        <button id="saveCardPinBtn">Enregistrer le PIN</button>
       </div>
     </div>
 
     <div class="row">
-      <select id="cardTypeSelect" onchange="changeCardType(this.value)">
+      <select id="cardTypeSelect">
         <option value="classic">Classique</option>
         <option value="premium">Premium</option>
         <option value="black">Black</option>
@@ -30,9 +39,7 @@
       <div id="cardInner" class="card-inner">
         <div class="card-front" id="cardFront">
           <div class="card-chip"></div>
-            <!-- LOGO -->
-            <div class="bank-logo">Rafael Bank</div>
-            <img src="img/logo.jpg" class="card-logo-img">
+          <div class="bank-logo">Rafael Bank</div>
 
           <div class="card-number" id="maskedCardNumber">**** **** **** 4821</div>
 
@@ -42,7 +49,7 @@
           </div>
 
           <div class="card-bottom-logos">
-            <div class="apple-pay-logo">Samsung Pay</div>
+            <div class="apple-pay-logo"> Pay</div>
             <div class="visa-logo">VISA</div>
           </div>
         </div>
@@ -59,9 +66,9 @@
     </div>
 
     <div class="row">
-      <button onclick="showFullCard()">Voir les infos</button>
-      <button class="secondary" onclick="flipCard()">Retourner la carte</button>
-      <button onclick="toggleCardBlock()">Activer / Bloquer</button>
+      <button id="showFullCardBtn">Voir les infos</button>
+      <button class="secondary" id="flipCardBtn">Retourner la carte</button>
+      <button id="toggleCardBlockBtn">Activer / Bloquer</button>
     </div>
   </div>
 
@@ -73,7 +80,6 @@
     <a id="adminNavLink" href="admin.html" style="display:none;">Admin</a>
   </nav>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

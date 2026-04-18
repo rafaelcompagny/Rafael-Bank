@@ -7,12 +7,23 @@
   <link rel="shortcut icon" href="img/logo.jpg">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-page="payments">
   <div class="container">
     <div class="topbar">
       <h2>Virements</h2>
       <div class="top-actions">
-        <a class="btn-link secondary" href="login.html" onclick="logout()">Se déconnecter</a>
+        <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
+        <script type="module">
+          import { logoutUser } from "./auth.js";
+
+          const btn = document.getElementById("logoutBtn");
+          if (btn) {
+            btn.addEventListener("click", async () => {
+              await logoutUser();
+              window.location.href = "login.html";
+            });
+          }
+        </script>
       </div>
     </div>
 
@@ -59,7 +70,17 @@
     <a id="adminNavLink" href="admin.html" style="display:none;">Admin</a>
   </nav>
 
+  <script type="module" src="firebase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
+  <script type="module">
+    import { watchAuth } from "./auth.js";
+
+    watchAuth((user) => {
+      if (!user) {
+        window.location.href = "login.html";
+      }
+    });
+  </script>
 </body>
 </html>

@@ -12,3 +12,6 @@ rafael-bank/
 
 localStorage.clear();
 location.reload();
+
+
+npm install firebase 

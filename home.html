@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="img/logo.jpg">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-page="home">
   <div class="container">
     <div class="topbar">
       <div>
@@ -15,7 +15,7 @@
         <p class="small" id="welcomeUser">Bienvenue</p>
       </div>
       <div class="top-actions">
-        <a class="btn-link secondary" href="login.html" onclick="logout()">Se déconnecter</a>
+        <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
 
@@ -28,11 +28,11 @@
     <p id="boostInfo" class="small"></p>
 
     <div class="row">
-      <button onclick="clickMoney()">+1 clic</button>
-      <button onclick="claimDailyBonus()">Bonus journalier</button>
-      <button onclick="upgradeClickIncome()">Améliorer le clic</button>
-      <button class="secondary" onclick="buyDoubleMoneyBoost()">x2 argent (1 min)</button>
-      <button id="adminAddMoneyBtn" style="display:none;" onclick="adminAddUnlimitedMoney()">Ajouter de l'argent</button>
+      <button id="clickBtn">+1 clic</button>
+      <button id="bonusBtn">Bonus journalier</button>
+      <button id="upgradeBtn">Améliorer le clic</button>
+      <button class="secondary" id="boostBtn">x2 argent (1 min)</button>
+      <button id="adminAddMoneyBtn" style="display:none;" id="adminAddMoneyBtn">Ajouter de l'argent</button>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -43,23 +43,14 @@
     <div class="card" style="margin-top:16px;">
       <h3>Crédits</h3>
       <div class="row">
-        <button onclick="takeLoan(500)">Crédit 500 €</button>
-        <button onclick="takeLoan(2000)">Crédit 2 000 €</button>
-        <button onclick="takeLoan(10000)">Crédit 10 000 €</button>
-        <button class="secondary" onclick="repayAllLoans()">Rembourser tout</button>
+        <button id="loan500Btn">Crédit 500 €</button>
+        <button id="loan2000Btn">Crédit 2 000 €</button>
+        <button id="loan10000Btn">Crédit 10 000 €</button>
+        <button class="secondary" id="repayAllBtn">Rembourser tout</button>
       </div>
       <p id="loanInfo"></p>
       <p id="loanTimer" class="small"></p>
       <div id="loanList"></div>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h3>Comptes</h3>
-      <div id="accountsList"></div>
-      <div class="row">
-        <button onclick="addSubAccount()">Ajouter un compte</button>
-        <button class="secondary" onclick="switchSubAccount()">Changer de compte</button>
-      </div>
     </div>
 
     <h3 style="margin-top:20px;">Historique global</h3>
@@ -74,6 +65,6 @@
     <a id="adminNavLink" href="admin.html" style="display:none;">Admin</a>
   </nav>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

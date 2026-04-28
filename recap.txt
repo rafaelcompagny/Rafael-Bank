@@ -1,9 +1,11 @@
 rafael-bank/V7/
+├── img/logo.jpg
 ├── index.html
 ├── home.html
 ├── boutique.html
 ├── payments.html
 ├── crypto.html
+├── mission.html
 ├── leaderboard.html
 ├── admin.html
 ├── success.html

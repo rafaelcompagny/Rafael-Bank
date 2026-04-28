@@ -3,27 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Admin Dashboard - Rafael Bank</title>
+  <title>Profil - Rafael Bank</title>
   <link rel="shortcut icon" href="img/logo.jpg">
   <link rel="stylesheet" href="style.css">
 </head>
-
-<body data-page="admin">
+<body data-page="profile">
   <div class="container">
     <div class="topbar">
-      <h2>Admin Dashboard</h2>
+      <div>
+        <h1>Profil</h1>
+        <p class="small">Ton identité, tes badges et ta progression.</p>
+      </div>
+
       <div class="top-actions">
         <button id="newsBellBtn" class="secondary">🔔</button>
         <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
 
-    <div class="card">
-      <h3>Vue globale des joueurs</h3>
-      <p class="small">Visible uniquement pour le compte admin.</p>
+    <div class="card profile-hero">
+      <div class="profile-avatar" id="profileAvatar">👤</div>
+      <div>
+        <h2 id="profileName">Joueur</h2>
+        <p class="small" id="profileInfo">Chargement...</p>
+        <p class="small" id="profileStats">Chargement...</p>
+      </div>
     </div>
 
-    <div id="adminUsersList" style="margin-top:16px;"></div>
+    <div class="card" style="margin-top:16px;">
+      <h2>🎖️ Badges débloqués</h2>
+      <p class="small" id="badgesCount">0 badge</p>
+      <div id="profileBadgesGrid" class="profile-badges-grid"></div>
+    </div>
+  </div>
+
+  <div id="newsPopup" class="news-popup" style="display:none;">
+    <div class="news-popup-content">
+      <div class="row">
+        <h3>📰 News</h3>
+        <button id="closeNewsPopupBtn" class="secondary">Fermer</button>
+      </div>
+      <div id="newsPopupContent">Chargement...</div>
+    </div>
   </div>
 
   <nav>
@@ -36,16 +57,6 @@
     <a href="profile.html"><span>👤</span><small>Profil</small></a>
     <a id="adminNavLink" href="admin.html" style="display:none;"><span>🛡️</span><small>Admin</small></a>
   </nav>
-
-  <div id="newsPopup" class="news-popup" style="display:none;">
-    <div class="news-popup-content">
-      <div class="row">
-        <h3>📰 News</h3>
-        <button id="closeNewsPopupBtn" class="secondary">Fermer</button>
-      </div>
-      <div id="newsPopupContent">Chargement...</div>
-    </div>
-  </div>
 
   <script type="module" src="app.js"></script>
 </body>

@@ -15,7 +15,10 @@
         <p class="small" id="welcomeUser">Bienvenue</p>
       </div>
       <div class="top-actions">
-        <button id="newsBellBtn" class="secondary">🔔</button>
+        <button id="newsBellBtn" class="secondary news-bell-btn">
+          🔔
+          <span id="newsUnreadDot" class="news-unread-dot" style="display:none;"></span>
+        </button>
         <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
@@ -28,6 +31,15 @@
       <p class="small" id="inflationInfo">Niveau économique : 1 • Inflation x1</p>
     </div>
     <div id="moneyPopContainer"></div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3 id="playerLevelText">Niveau 1</h3>
+      <p class="small" id="playerXpText">0 / 1 000 XP</p>
+
+      <div class="xp-bar">
+        <div id="playerXpBar"></div>
+      </div>
+    </div>
     
     <p id="boostInfo" class="small"></p>
 
@@ -136,6 +148,7 @@
     <a href="payments.html"><span>💸</span><small>Paiement</small></a>
     <a href="mission.html"><span>🎯</span><small>Missions</small></a>
     <a href="leaderboard.html"><span>🏆</span><small>Top</small></a>
+    <a href="profile.html"><span>👤</span><small>Profil</small></a>
     <a id="adminNavLink" href="admin.html" style="display:none;"><span>🛡️</span><small>Admin</small></a>
   </nav>
 

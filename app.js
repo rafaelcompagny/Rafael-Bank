@@ -23,6 +23,7 @@ const HISTORY_PER_PAGE = 10;
 let currentAdminUid = null;
 let currentLeaderboardType = "wealth";
 const MAX_OFFLINE_PASSIVE_MS = 2 * 60 * 60 * 1000; // 2 heures
+let currentUserUid = null;
 
 /* ================= HELPE50RS ================= */
 
@@ -86,6 +87,135 @@ function applyUserTheme(profile) {
   if (theme && theme !== "default") {
     document.body.classList.add(`theme-${theme}`);
   }
+}
+
+function getLevelFromXp(xp = 0) {
+  let level = 1;
+  let required = 1000;
+  let remainingXp = xp;
+
+  while (remainingXp >= required) {
+    remainingXp -= required;
+    level++;
+    required = Math.floor(required * 1.35);
+  }
+
+  return {
+    level,
+    currentXp: remainingXp,
+    requiredXp: required,
+    percent: Math.min(100, (remainingXp / required) * 100)
+  };
+}
+
+function getLevelReward(level) {
+  if (level <= 1) return 0;
+
+  // Récompense progressive
+  return Math.round(1000 * Math.pow(1.45, level - 2));
+}
+
+function addXp(profile, amount, reason = "Action", showXpToast = true) {
+  const oldLevel = getLevelFromXp(profile.xp || 0).level;
+
+  profile.xp = Number(profile.xp || 0) + amount;
+
+  const newLevel = getLevelFromXp(profile.xp || 0).level;
+
+  profile.history = profile.history || [];
+  profile.accounts = profile.accounts || { Principal: 0 };
+
+  const activeAccount = profile.activeAccount || "Principal";
+
+  profile.history.unshift(`XP gagné : +${amount} XP (${reason})`);
+
+  // ✅ Toast XP (seulement si demandé)
+  if (showXpToast) {
+    showToast(`✨ +${amount} XP (${reason})`, "xp");
+  }
+
+  // 🎉 LEVEL UP
+  if (newLevel > oldLevel) {
+    let totalReward = 0;
+
+    for (let lvl = oldLevel + 1; lvl <= newLevel; lvl++) {
+      totalReward += getLevelReward(lvl);
+    }
+
+    profile.accounts[activeAccount] =
+      (profile.accounts[activeAccount] || 0) + totalReward;
+
+    profile.history.unshift(
+      `Niveau ${newLevel} atteint (+${formatMoney(totalReward)})`
+    );
+
+    showToast(
+      `⭐ Niveau ${newLevel} ! +${formatMoney(totalReward)}`,
+      "level"
+    );
+  }
+}
+
+async function getLatestNewsId() {
+  const history = await getNewsHistory();
+  return history.length ? history[0].id : null;
+}
+
+async function checkUnreadNews(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  const latestNewsId = await getLatestNewsId();
+  const dot = document.getElementById("newsUnreadDot");
+
+  if (!dot || !latestNewsId) return;
+
+  const lastReadNewsId = profile.lastReadNewsId || null;
+
+  if (lastReadNewsId !== latestNewsId) {
+    dot.style.display = "block";
+  } else {
+    dot.style.display = "none";
+  }
+}
+
+async function markNewsAsRead(uid) {
+  const latestNewsId = await getLatestNewsId();
+  if (!latestNewsId) return;
+
+  await updateUserProfile(uid, {
+    lastReadNewsId: latestNewsId
+  });
+
+  const dot = document.getElementById("newsUnreadDot");
+  if (dot) dot.style.display = "none";
+}
+
+function getBadgeById(id) {
+  return BADGES.find(b => b.id === id);
+}
+
+function getRarityLabel(rarity) {
+  if (rarity === "common") return "Commun";
+  if (rarity === "rare") return "Rare";
+  if (rarity === "epic") return "Épique";
+  if (rarity === "legendary") return "Légendaire";
+  return "Badge";
+}
+
+function renderBadgeCard(badge, unlocked = true) {
+  if (!badge) return "";
+
+  return `
+    <div class="badge-card ${badge.rarity || "common"} ${unlocked ? "" : "locked"}">
+      <div class="badge-card-icon">${unlocked ? badge.icon : "🔒"}</div>
+      <div>
+        <h3>${escapeHtml(badge.name)}</h3>
+        <p class="small">${escapeHtml(badge.desc)}</p>
+        <span class="badge-rarity">${getRarityLabel(badge.rarity)}</span>
+      </div>
+    </div>
+  `;
 }
 
 function formatMoney(value) {
@@ -326,6 +456,10 @@ async function renderHome(uid) {
   const loanBtn2 = document.getElementById("loanBtn2");
   const loanBtn3 = document.getElementById("loanBtn3");
 
+  const playerLevelText = document.getElementById("playerLevelText");
+  const playerXpText = document.getElementById("playerXpText");
+  const playerXpBar = document.getElementById("playerXpBar");
+
   if (balanceEl) animateNumber(balanceEl, balance);
   if (welcomeEl) {
     welcomeEl.innerText = `Bienvenue ${profile.displayName || profile.username} • Compte actif : ${activeAccount}`;
@@ -548,6 +682,20 @@ async function renderHome(uid) {
     inflationInfo.innerText = `Niveau économique : ${wealthLevel} • Inflation x${inflationMultiplier}`;
   }
 
+  const levelData = getLevelFromXp(profile.xp || 0);
+
+  if (playerLevelText) {
+    playerLevelText.innerText = `Niveau ${levelData.level}`;
+  }
+
+  if (playerXpText) {
+    playerXpText.innerText = `${Math.floor(levelData.currentXp).toLocaleString("fr-FR")} / ${levelData.requiredXp.toLocaleString("fr-FR")} XP`;
+  }
+
+  if (playerXpBar) {
+    playerXpBar.style.width = `${levelData.percent}%`;
+  }
+
   if (investmentsList) {
     investmentsList.innerHTML = INVESTMENTS.map(inv => {
       const qty = profile.investments[inv.id] || 0;
@@ -598,7 +746,8 @@ async function renderHome(uid) {
     accounts: profile.accounts,
     loans: profile.loans,
     history: profile.history,
-    lastLoanAutoPayment: profile.lastLoanAutoPayment
+    lastLoanAutoPayment: profile.lastLoanAutoPayment,
+    badges: profile.badges,
   });
 
   await renderHome(uid);
@@ -616,7 +765,7 @@ async function repayAllLoansFirebase(uid) {
 
   let balance = profile.accounts[activeAccount] || 0;
   if (profile.loans.length === 0) {
-    showToast("Aucun crédit à rembourser.");
+    showToast("Aucun crédit à rembourser.", "error");
     return;
   }
 
@@ -624,7 +773,7 @@ async function repayAllLoansFirebase(uid) {
   const amountToPay = Math.min(balance, totalDebt);
 
   if (amountToPay <= 0) {
-    showToast("Pas assez d'argent.");
+    showToast("Pas assez d'argent.", "error");
     return;
   }
 
@@ -649,7 +798,8 @@ async function repayAllLoansFirebase(uid) {
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     loans: profile.loans,
-    history: profile.history
+    history: profile.history,
+    badges: profile.badges,
   });
 
   await renderHome(uid);
@@ -706,7 +856,8 @@ async function autoLoanPaymentFirebase(uid) {
     accounts: profile.accounts,
     loans: profile.loans,
     history: profile.history,
-    lastLoanAutoPayment: profile.lastLoanAutoPayment
+    lastLoanAutoPayment: profile.lastLoanAutoPayment,
+    badges: profile.badges,
   });
 
   await renderHome(uid);
@@ -789,7 +940,7 @@ async function buyInvestment(uid, investmentId) {
   const finalCost = Math.round(investment.cost * getInflationMultiplier(profile));
 
   if (balance < finalCost) {
-    showToast("Pas assez d'argent pour acheter cet investissement.");
+    showToast("Pas assez d'argent pour acheter cet investissement.", "error");
     return;
   }
 
@@ -799,12 +950,17 @@ async function buyInvestment(uid, investmentId) {
   profile.history.unshift(`Investissement acheté : ${investment.name} -${formatMoney(finalCost)}`);
 
   addDailyQuestProgress(profile, "investmentBuy", 1);
+  addXp(profile, 50, "Investissement");
+  handleBadges(profile);
+
 
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     investments: profile.investments,
     history: profile.history,
-    dailyQuests: profile.dailyQuests
+    dailyQuests: profile.dailyQuests,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
   await renderHome(uid);
@@ -855,13 +1011,14 @@ async function applyPassiveIncome(uid) {
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     lastPassiveIncome: profile.lastPassiveIncome,
-    history: profile.history
+    history: profile.history,
+    badges: profile.badges,
   });
 }
 
 async function initHome(user) {
 
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
   await renderHome(user.uid);
     document.querySelectorAll(".buy-investment-btn").forEach(btn => {
@@ -925,16 +1082,28 @@ async function initHome(user) {
         limitedMultiplier *
         prestigeMultiplier;
 
+      addXp(profile, 1, "Clic", false);
       showMoneyPop(gain);
       profile.totalClicks = (profile.totalClicks || 0) + 1;
       addDailyQuestProgress(profile, "clicks", 1);
       addDailyQuestProgress(profile, "earnMoney", gain);
+      const newBadges = checkBadges(profile);
+      handleBadges(profile);
+
+      await updateUserProfile(user.uid, {
+        accounts: profile.accounts,
+        totalClicks: profile.totalClicks,
+        xp: profile.xp,
+        badges: profile.badges
+      });
 
       profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + gain;
       await updateUserProfile(user.uid, {
         accounts: profile.accounts,
         totalClicks: profile.totalClicks,
-        dailyQuests: profile.dailyQuests
+        dailyQuests: profile.dailyQuests,
+        xp: profile.xp,
+        badges: profile.badges,
       });
       bindInvestmentButtons(user.uid);
       await renderHome(user.uid);
@@ -949,7 +1118,7 @@ async function initHome(user) {
       const oneDay = 24 * 60 * 60 * 1000;
 
       if ((now - (profile.lastDailyBonus || 0)) < oneDay) {
-        showToast("Cadeau déjà récupéré.");
+        showToast("Cadeau déjà récupéré.", "warning");
         return;
       }
 
@@ -991,14 +1160,15 @@ async function initHome(user) {
         boost: profile.boost,
         crypto: profile.crypto,
         lastDailyBonus: profile.lastDailyBonus,
-        history: profile.history
+        history: profile.history,
+        badges: profile.badges,
       });
 
       historyPage = 1;
       await renderHome(user.uid);
       bindInvestmentButtons(user.uid);
 
-      showToast(`Tu as reçu : ${reward.label}`);
+      showToast(`Tu as reçu : ${reward.label}`, "succes");
     };
   }
 
@@ -1010,9 +1180,9 @@ async function initHome(user) {
       const currentLevel = profile.clickLevel || 1;
       const nextUpgrade = getNextUpgrade(currentLevel);
 
-      if (!nextUpgrade) return showToast("Niveau maximal atteint.");
+      if (!nextUpgrade) return showToast("Niveau maximal atteint.", "error");
       if (currentBalance < nextUpgrade.cost) {
-        return showToast(`Pas assez d'argent. Il faut ${nextUpgrade.cost} €.`);
+        return showToast(`Pas assez d'argent. Il faut ${nextUpgrade.cost} €.`, "error");
       }
 
       profile.accounts[activeAccount] = currentBalance - nextUpgrade.cost;
@@ -1026,7 +1196,8 @@ async function initHome(user) {
         accounts: profile.accounts,
         clickValue: profile.clickValue,
         clickLevel: profile.clickLevel,
-        history: newHistory
+        history: newHistory,
+        badges: profile.badges,
       });
 
       bindInvestmentButtons(user.uid);
@@ -1045,10 +1216,10 @@ async function initHome(user) {
       const boost = profile.boost || { doubleMoneyUntil: 0 };
 
       if (now < (boost.doubleMoneyUntil || 0)) {
-        return showToast("Le boost x2 est déjà actif.");
+        return showToast("Le boost x2 est déjà actif.", "error");
       }
       if (currentBalance < boostPrice) {
-        return showToast(`Pas assez d'argent. Il faut ${boostPrice} €.`);
+        return showToast(`Pas assez d'argent. Il faut ${boostPrice} €.`, "error");
       }
 
       profile.accounts[activeAccount] = currentBalance - boostPrice;
@@ -1060,7 +1231,8 @@ async function initHome(user) {
       await updateUserProfile(user.uid, {
         accounts: profile.accounts,
         boost: profile.boost,
-        history: newHistory
+        history: newHistory,
+        badges: profile.badges,
       });
 
       bindInvestmentButtons(user.uid);
@@ -1086,7 +1258,7 @@ async function initHome(user) {
 
       const activeAccount = profile.activeAccount || "Principal";
       const amount = Number(prompt("Montant à ajouter au compte actif ?"));
-      if (!amount || amount <= 0) return showToast("Montant invalide.");
+      if (!amount || amount <= 0) return showToast("Montant invalide.", "error");
 
       profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + amount;
       const newHistory = profile.history || [];
@@ -1094,7 +1266,8 @@ async function initHome(user) {
 
       await updateUserProfile(user.uid, {
         accounts: profile.accounts,
-        history: newHistory
+        history: newHistory,
+        badges: profile.badges,
       });
 
       bindInvestmentButtons(user.uid);
@@ -1109,7 +1282,7 @@ async function initHome(user) {
       if (!entered) return;
 
       if ((profile.card?.pin || "") !== entered) {
-        return showToast("PIN incorrect.");
+        return showToast("PIN incorrect.", "warning");
       }
 
       profile.card = profile.card || {};
@@ -1126,7 +1299,7 @@ async function initHome(user) {
       const newPin = document.getElementById("newCardPinHome").value.trim();
 
       if (!/^\d{4}$/.test(newPin)) {
-        return showToast("Le PIN doit contenir exactement 4 chiffres.");
+        return showToast("Le PIN doit contenir exactement 4 chiffres.", "error");
       }
 
       profile.card = profile.card || {};
@@ -1136,7 +1309,8 @@ async function initHome(user) {
       profile.card.type = profile.card.type || "classic";
 
       await updateUserProfile(user.uid, {
-        card: profile.card
+        card: profile.card,
+        badges: profile.badges,
       });
 
       document.getElementById("newCardPinHome").value = "";
@@ -1211,7 +1385,8 @@ async function initHome(user) {
       profile.shop.autoClickerEnabled = !profile.shop.autoClickerEnabled;
 
       await updateUserProfile(user.uid, {
-        shop: profile.shop
+        shop: profile.shop,
+        badges: profile.badges,
       });
 
       bindInvestmentButtons(user.uid);
@@ -1233,6 +1408,7 @@ async function initHome(user) {
       await updateUserProfile(user.uid, { accounts: freshProfile.accounts });
     }
 
+    await checkUnreadNews(user.uid);
     await applyPassiveIncome(user.uid);
     await autoLoanPaymentFirebase(user.uid);
     await checkAndClaimMissions(user.uid);
@@ -1248,7 +1424,7 @@ async function initHome(user) {
 
     const pin = prompt("Entre ton PIN carte");
     if (pin !== profile.card?.pin) {
-      showToast("PIN incorrect");
+      showToast("PIN incorrect", "error");
       return;
     }
 
@@ -1386,12 +1562,12 @@ async function initPayments(user) {
       const beneficiaryIban = document.getElementById("iban")?.value.trim() || "";
       const amount = Number(document.getElementById("amount")?.value);
 
-      if (!beneficiaryName && !beneficiaryIban) return showToast("Entre un bénéficiaire ou un IBAN.");
-      if (!amount || amount <= 0) return showToast("Entre un montant valide.");
+      if (!beneficiaryName && !beneficiaryIban) return showToast("Entre un bénéficiaire ou un IBAN.", "error");
+      if (!amount || amount <= 0) return showToast("Entre un montant valide.", "error");
 
       const activeAccount = sender.activeAccount || "Principal";
       const senderBalance = sender.accounts?.[activeAccount] || 0;
-      if (senderBalance < amount) return showToast("Pas assez d'argent.");
+      if (senderBalance < amount) return showToast("Pas assez d'argent.", "error");
 
       const allUsers = await getAllUsers();
       const target = allUsers.find(u =>
@@ -1399,8 +1575,8 @@ async function initPayments(user) {
         (beneficiaryName && ((u.displayName || "").toLowerCase() === beneficiaryName.toLowerCase() || (u.username || "").toLowerCase() === beneficiaryName.toLowerCase()))
       );
 
-      if (!target) return showToast("Aucun compte Rafael Bank trouvé.");
-      if (target.uid === user.uid) return showToast("Tu ne peux pas t'envoyer de virement à toi-même.");
+      if (!target) return showToast("Aucun compte Rafael Bank trouvé.", "error");
+      if (target.uid === user.uid) return showToast("Tu ne peux pas t'envoyer de virement à toi-même.", "error");
 
       const receiver = await getUserProfile(target.uid);
       const receiverActiveAccount = receiver.activeAccount || "Principal";
@@ -1416,12 +1592,14 @@ async function initPayments(user) {
 
       await updateUserProfile(user.uid, {
         accounts: sender.accounts,
-        history: sender.history
+        history: sender.history,
+        badges: profile.badges,
       });
 
       await updateUserProfile(target.uid, {
         accounts: receiver.accounts,
-        history: receiver.history
+        history: receiver.history,
+        badges: profile.badges,
       });
 
       const amountInput = document.getElementById("amount");
@@ -1438,8 +1616,8 @@ async function initPayments(user) {
       const targetValue = document.getElementById("adminTargetUser")?.value.trim() || "";
       const amount = Number(document.getElementById("adminAmount")?.value);
 
-      if (!targetValue) return showToast("Entre un joueur.");
-      if (!amount || amount <= 0) return showToast("Entre un montant valide.");
+      if (!targetValue) return showToast("Entre un joueur.","error");
+      if (!amount || amount <= 0) return showToast("Entre un montant valide.", "error");
 
       const allUsers = await getAllUsers();
       const target = allUsers.find(u =>
@@ -1448,8 +1626,8 @@ async function initPayments(user) {
         (u.iban || "").toLowerCase() === targetValue.toLowerCase()
       );
 
-      if (!target) return showToast("Joueur introuvable.");
-      if (target.uid === user.uid) return showToast("Impossible d'envoyer à toi-même ici.");
+      if (!target) return showToast("Joueur introuvable.", "error");
+      if (target.uid === user.uid) return showToast("Impossible d'envoyer à toi-même ici.", "error");
 
       const targetProfile = await getUserProfile(target.uid);
       const targetActiveAccount = targetProfile.activeAccount || "Principal";
@@ -1464,11 +1642,13 @@ async function initPayments(user) {
 
       await updateUserProfile(target.uid, {
         accounts: targetProfile.accounts,
-        history: targetProfile.history
+        history: targetProfile.history,
+        badges: profile.badges,
       });
 
       await updateUserProfile(user.uid, {
-        history: adminProfile.history
+        history: adminProfile.history,
+        badges: profile.badges,
       });
 
       const adminTargetUserInput = document.getElementById("adminTargetUser");
@@ -1477,11 +1657,12 @@ async function initPayments(user) {
       if (adminAmountInput) adminAmountInput.value = "";
 
       await renderPayments(user.uid);
-      showToast("Argent envoyé.");
+      showToast("Argent envoyé.", "success");
     };
   }
 
   setInterval(async () => {
+    await checkUnreadNews(user.uid);
     await renderPayments(user.uid);
   }, 1000);
 }
@@ -1577,7 +1758,7 @@ async function initCards(user) {
       const newCardPin = document.getElementById("newCardPin")?.value.trim() || "";
 
       if (!/^\d{4}$/.test(newCardPin)) {
-        return showToast("Le PIN doit contenir exactement 4 chiffres.");
+        return showToast("Le PIN doit contenir exactement 4 chiffres.", "error");
       }
 
       profile.card = profile.card || {};
@@ -1586,7 +1767,7 @@ async function initCards(user) {
       profile.card.blocked = profile.card.blocked || false;
       profile.card.type = profile.card.type || "classic";
 
-      await updateUserProfile(user.uid, { card: profile.card });
+      await updateUserProfile(user.uid, { card: profile.card, badges: profile.badges, });
       const newCardPinInput = document.getElementById("newCardPin");
       if (newCardPinInput) newCardPinInput.value = "";
       await renderCards(user.uid);
@@ -1600,7 +1781,7 @@ async function initCards(user) {
       if (!entered) return;
 
       if ((profile.card?.pin || "") !== entered) {
-        return showToast("PIN incorrect.");
+        return showToast("PIN incorrect.", "error");
       }
 
       profile.card.revealed = !profile.card.revealed;
@@ -1713,7 +1894,7 @@ async function syncPlayerPortfolioWithMarket(uid) {
     profile.crypto.currentAsset = "BTC";
   }
 
-  await updateUserProfile(uid, { crypto: profile.crypto });
+  await updateUserProfile(uid, { crypto: profile.crypto, badges: profile.badges, });
   return { profile, market };
 }
 
@@ -1877,11 +2058,11 @@ async function buyCrypto(uid) {
   if (!input) return;
 
   const amount = Number(input.value);
-  if (!amount || amount <= 0) return showToast("Entre un montant valide.");
+  if (!amount || amount <= 0) return showToast("Entre un montant valide.", "error");
 
   const activeAccount = profile.activeAccount || "Principal";
   const balance = profile.accounts?.[activeAccount] || 0;
-  if (balance < amount) return showToast("Pas assez d'argent.");
+  if (balance < amount) return showToast("Pas assez d'argent.","error");
 
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
@@ -1902,13 +2083,17 @@ async function buyCrypto(uid) {
   asset.transactions.unshift(line);
   profile.history.unshift(line);
 
+  addXp(profile, 25, "Achat crypto");
   addDailyQuestProgress(profile, "cryptoBuy", 1);
+  handleBadges(profile);
 
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     history: profile.history,
     crypto: profile.crypto,
-    dailyQuests: profile.dailyQuests
+    dailyQuests: profile.dailyQuests,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
   input.value = "";
@@ -1925,13 +2110,13 @@ async function sellPartialCrypto(uid) {
   if (!input) return;
 
   const qty = Number(input.value);
-  if (!qty || qty <= 0) return showToast("Quantité invalide.");
+  if (!qty || qty <= 0) return showToast("Quantité invalide.", "error");
 
   const activeAccount = profile.activeAccount || "Principal";
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
   if (!asset) return;
-  if (qty > (asset.owned || 0)) return showToast("Pas assez d’unités.");
+  if (qty > (asset.owned || 0)) return showToast("Pas assez d’unités.", "error");
 
   const saleValue = qty * asset.price;
   const costBasis = qty * (asset.avgBuyPrice || 0);
@@ -1951,10 +2136,15 @@ async function sellPartialCrypto(uid) {
   asset.transactions.unshift(line);
   profile.history.unshift(line);
 
+  addXp(profile, 15, "Vente crypto");
+  handleBadges(profile);
+
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     history: profile.history,
-    crypto: profile.crypto
+    crypto: profile.crypto,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
   input.value = "";
@@ -1970,7 +2160,7 @@ async function sellAllCrypto(uid) {
   const activeAccount = profile.activeAccount || "Principal";
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
-  if (!asset || (asset.owned || 0) <= 0) return showToast("Rien à vendre.");
+  if (!asset || (asset.owned || 0) <= 0) return showToast("Rien à vendre.", "error");
 
   const qty = asset.owned;
   const saleValue = qty * asset.price;
@@ -1988,10 +2178,15 @@ async function sellAllCrypto(uid) {
   asset.owned = 0;
   asset.avgBuyPrice = 0;
 
+  addXp(profile, 15, "Vente crypto");
+  handleBadges(profile);
+
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     history: profile.history,
-    crypto: profile.crypto
+    crypto: profile.crypto,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
   await renderCrypto(uid);
@@ -2033,7 +2228,7 @@ async function tickGlobalCryptoMarket(uid) {
 }
 
 async function initCrypto(user) {
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
   await renderCrypto(user.uid);
   await renderInvestmentsInsideCrypto(user.uid);
@@ -2052,7 +2247,7 @@ async function initCrypto(user) {
       const profile = await getUserProfile(user.uid);
       profile.crypto = profile.crypto || {};
       profile.crypto.currentAsset = assetSelect.value;
-      await updateUserProfile(user.uid, { crypto: profile.crypto });
+      await updateUserProfile(user.uid, { crypto: profile.crypto, badges: profile.badges, });
       await renderCrypto(user.uid);
     };
   }
@@ -2081,7 +2276,7 @@ async function initCrypto(user) {
 
       profile.crypto = profile.crypto || {};
       profile.crypto.currentAsset = adminAssetSelect.value;
-      await updateUserProfile(user.uid, { crypto: profile.crypto });
+      await updateUserProfile(user.uid, { crypto: profile.crypto, badges: profile.badges, });
       await renderCrypto(user.uid);
     };
   }
@@ -2095,7 +2290,7 @@ async function initCrypto(user) {
       if (!input) return;
 
       const newPrice = Number(input.value.replace(",", "."));
-      if (!newPrice || newPrice <= 0) return showToast("Prix invalide.");
+      if (!newPrice || newPrice <= 0) return showToast("Prix invalide.", "error");
 
       const market = await ensureGlobalMarket();
       const assetKey = profile.crypto?.currentAsset || "BTC";
@@ -2114,7 +2309,7 @@ async function initCrypto(user) {
 
       profile.history = profile.history || [];
       profile.history.unshift(`Prix admin défini pour ${assetKey} : ${newPrice.toFixed(2)} €`);
-      await updateUserProfile(user.uid, { history: profile.history });
+      await updateUserProfile(user.uid, { history: profile.history, badges: profile.badges, });
 
       await renderCrypto(user.uid);
     };
@@ -2127,6 +2322,7 @@ async function initCrypto(user) {
     if (!news || Date.now() > (news.expiresAt || 0)) {
       await triggerRandomNews();
     }
+    await checkUnreadNews(user.uid);
 
     await renderInvestmentsInsideCrypto(user.uid);
   }, 1000);
@@ -2251,7 +2447,7 @@ async function getStripeHistory(uid) {
 
 window.adminRemoveMoney = async function(uid) {
   const target = await getUserProfile(uid);
-  if (!target) return showToast("Utilisateur introuvable.");
+  if (!target) return showToast("Utilisateur introuvable.", "error");
 
   const activeAccount = target.activeAccount || "Principal";
   target.accounts = target.accounts || { Principal: 0 };
@@ -2260,12 +2456,12 @@ window.adminRemoveMoney = async function(uid) {
   const amount = Number(prompt(`Montant à retirer ? Solde actuel : ${currentBalance.toFixed(2)} €`));
 
   if (!amount || amount <= 0) {
-    showToast("Montant invalide.");
+    showToast("Montant invalide.", "error");
     return;
   }
 
   if (currentBalance < amount) {
-    showToast("Impossible : le joueur n'a pas assez d'argent.");
+    showToast("Impossible : le joueur n'a pas assez d'argent.", "error");
     return;
   }
 
@@ -2275,16 +2471,17 @@ window.adminRemoveMoney = async function(uid) {
 
   await updateUserProfile(uid, {
     accounts: target.accounts,
-    history: target.history
+    history: target.history,
+    badges: profile.badges,
   });
 
-  showToast("Argent retiré.");
+  showToast("Argent retiré.", "success");
   location.reload();
 };
 
 
 async function initAdmin(user) {
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
   await renderAdmin(user);
 }
@@ -2428,7 +2625,7 @@ async function startStripeCheckout(uid, priceId, itemId, mode = "payment") {
     const data = snap.data();
 
     if (data?.error) {
-      showToast(data.error.message);
+      showToast(data.error.message, "error");
     }
 
     if (data?.url) {
@@ -2870,7 +3067,7 @@ async function purchaseShopItem(uid, itemId) {
   if (item.limitedToDays) {
     const visible = (Date.now() - profile.createdAt) < (item.limitedToDays * 24 * 60 * 60 * 1000);
     if (!visible) {
-      showToast("Cette offre n'est plus disponible.");
+      showToast("Cette offre n'est plus disponible.", "warning");
       return;
     }
   }
@@ -2919,7 +3116,7 @@ async function purchaseShopItem(uid, itemId) {
       const oneDay = 24 * 60 * 60 * 1000;
 
       if ((now - (profile.lastDailyBonus || 0)) < oneDay) {
-        showToast("Cadeau déjà récupéré.");
+        showToast("Cadeau déjà récupéré.", "warning");
         return;
       }
 
@@ -2952,7 +3149,7 @@ async function purchaseShopItem(uid, itemId) {
 
       profile.lastDailyBonus = now;
       profile.history.unshift(`Cadeau du jour : ${reward.label}`);
-      showToast(`🎁 Cadeau du jour récupéré : ${reward.label}`);
+      showToast(`🎁 Cadeau du jour récupéré : ${reward.label}`, "success");
       break;
     }
 
@@ -3018,14 +3215,14 @@ async function purchaseShopItem(uid, itemId) {
     case "lootbox": {
       const reward = drawLootboxReward(false);
       await applyLootboxReward(profile, reward);
-      showToast(`Loot Box : ${reward.label}`);
+      showToast(`Loot Box : ${reward.label}`, "succes");
       break;
     }
 
     case "megaLootbox": {
       const reward = drawLootboxReward(true);
       await applyLootboxReward(profile, reward);
-      showToast(`Mega Loot Box : ${reward.label}`);
+      showToast(`Mega Loot Box : ${reward.label}`, "success");
       break;
     }
 
@@ -3100,10 +3297,11 @@ async function purchaseShopItem(uid, itemId) {
     card: profile.card,
     shop: profile.shop,
     crypto: profile.crypto,
-    lastDailyBonus: profile.lastDailyBonus
+    lastDailyBonus: profile.lastDailyBonus,
+    badges: profile.badges,
   });
 
-  showToast("Achat réussi.");
+  showToast("Achat réussi.", "succes");
   await renderShop(uid);
 }
 
@@ -3226,7 +3424,7 @@ async function renderShop(uid) {
       const balance = profile.accounts?.[activeAccount] || 0;
 
       if (balance < item.fakePrice) {
-        showToast("Pas assez d'argent du jeu.");
+        showToast("Pas assez d'argent du jeu.", "error");
         return;
       }
 
@@ -3236,7 +3434,8 @@ async function renderShop(uid) {
 
       await updateUserProfile(uid, {
         accounts: profile.accounts,
-        history: profile.history
+        history: profile.history,
+        badges: profile.badges,
       });
 
       await openLootboxWithAnimation(uid, item);
@@ -3289,8 +3488,11 @@ async function renderShop(uid) {
 }
 
 async function initShop(user) {
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
+  setInterval(async () => {
+    await checkUnreadNews(user.uid);
+  }, 5000);
   await renderShop(user.uid);
   bindLootboxModals();
 }
@@ -3368,14 +3570,25 @@ async function renderLeaderboard(uid) {
   const users = await getAllUsers();
 
   const ranking = users
-    .filter(u => !u.isAdmin)
-    .map(u => ({
-      uid: u.uid,
-      rawUser: u,
-      name: u.displayName || u.username || u.email || "Joueur",
-      isCurrentUser: u.uid === uid,
-      value: getLeaderboardValue(u, currentLeaderboardType)
-    }))
+    .filter(user => !user.isAdmin)
+    .map(user => {
+      const badgesHtml = (user.badges || [])
+        .slice(0, 3)
+        .map(id => {
+          const b = BADGES.find(x => x.id === id);
+          return b ? `<span class="lb-badge big ${b.rarity || "common"}" title="${escapeHtml(b.name)}">${b.icon}</span>` : "";
+        })
+        .join("");
+
+      return {
+        uid: user.uid,
+        rawUser: user,
+        name: user.displayName || user.username || user.email || "Joueur",
+        isCurrentUser: user.uid === uid,
+        value: getLeaderboardValue(user, currentLeaderboardType),
+        badgesHtml
+      };
+    })
     .sort((a, b) => {
       if (currentLeaderboardType === "prestige") {
         if (b.value !== a.value) return b.value - a.value;
@@ -3397,9 +3610,15 @@ async function renderLeaderboard(uid) {
     return `
       <div class="leaderboard-item ${rank === 1 ? "leaderboard-top1" : ""}">
         <div>
-          <div class="leaderboard-rank">${medal} ${escapeHtml(u.name)} ${u.isCurrentUser ? "• Toi" : ""}</div>
+          <div class="leaderboard-rank">
+            ${medal} ${escapeHtml(u.name)} ${u.isCurrentUser ? "• Toi" : ""}
+          </div>
+
+          <div class="lb-badges">${u.badgesHtml}</div>
+
           <div class="small">${getLeaderboardTitle(currentLeaderboardType)}</div>
         </div>
+
         <strong>${formatLeaderboardValue(u.value, currentLeaderboardType)}</strong>
       </div>
     `;
@@ -3453,12 +3672,13 @@ async function rewardLeaderboardTop(uid, ranking) {
     accounts: profile.accounts,
     shop: profile.shop,
     history: profile.history,
-    lastLeaderboardReward: profile.lastLeaderboardReward
+    lastLeaderboardReward: profile.lastLeaderboardReward,
+    badges: profile.badges,
   });
 }
 
 async function initLeaderboard(user) {
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
 
   document.querySelectorAll(".leaderboard-tab").forEach(btn => {
@@ -3474,6 +3694,7 @@ async function initLeaderboard(user) {
   await renderLeaderboard(user.uid);
 
   setInterval(async () => {
+    await checkUnreadNews(user.uid);
     await renderLeaderboard(user.uid);
   }, 5000);
 }
@@ -3679,14 +3900,15 @@ async function openLootboxWithAnimation(uid, item) {
       boost: profile.boost,
       shop: profile.shop,
       crypto: profile.crypto,
-      card: profile.card
+      card: profile.card,
+      badges: profile.badges,
     });
 
     animation.classList.add(reward.rarity === "legendary" ? "legendary" : "opened");
     animation.innerText = "✨";
     title.innerText = "Récompense obtenue !";
     text.innerText = reward.label;
-    showToast(`🎁 Lootbox : ${reward.label}`);
+    showToast(`🎁 Lootbox : ${reward.label}`, "success");
 
     await renderShop(uid);
   }, 1600);
@@ -3803,6 +4025,7 @@ async function initInvestments(user) {
   setInterval(async () => {
     await applyPassiveIncome(user.uid);
     await renderInvestmentsPage(user.uid);
+    await checkUnreadNews(user.uid);
   }, 1000);
 }
 
@@ -3852,6 +4075,20 @@ const MISSIONS = [
     check: profile => getUserNetWorth(profile) >= 1000000000
   },
   {
+    id: "level_10",
+    title: "Banquier expérimenté",
+    description: "Atteindre le niveau 10",
+    reward: 250000,
+    check: profile => getLevelFromXp(profile.xp || 0).level >= 10
+  },
+  {
+    id: "level_25",
+    title: "Légende financière",
+    description: "Atteindre le niveau 25",
+    reward: 2500000,
+    check: profile => getLevelFromXp(profile.xp || 0).level >= 25
+  },
+  {
     id: "first_prestige",
     title: "Nouvelle vie",
     description: "Faire ton premier prestige",
@@ -3860,7 +4097,7 @@ const MISSIONS = [
   },
   {
     id: "prestige_5",
-    title: "Légende financière",
+    title: "Légende Vivante",
     description: "Atteindre le prestige niveau 5",
     reward: 5000000,
     check: profile => (profile.prestige?.level || 0) >= 5
@@ -3885,9 +4122,11 @@ async function checkAndClaimMissions(uid) {
     if (mission.check(profile)) {
       profile.completedMissions.push(mission.id);
       profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + mission.reward;
-      profile.history.unshift(`Mission réussie : ${mission.title} +${formatMoney(mission.reward)}`);
+      profile.history.unshift(`Mission réussie : ${mission.title} : +${formatMoney(mission.reward)}`);
 
-      showToast(`🏆 Succès terminé : ${mission.title} +${formatMoney(mission.reward)}`);
+      showToast(`🏆 Succès terminé : ${mission.title} +${formatMoney(mission.reward)}`, "success");
+      addXp(profile, 250, `Mission : ${mission.title}`);
+      handleBadges(profile);
 
       changed = true;
     }
@@ -3897,7 +4136,9 @@ async function checkAndClaimMissions(uid) {
     await updateUserProfile(uid, {
       completedMissions: profile.completedMissions,
       accounts: profile.accounts,
-      history: profile.history
+      history: profile.history,
+      xp: profile.xp,
+      badges: profile.badges,
     });
   }
 }
@@ -3954,13 +4195,15 @@ async function renderMissions(uid) {
 }
 
 async function initMissions(user) {
-  bindNewsPopup();
+  bindNewsPopup(user.uid);
   bindLogout();
   await renderMissions(user.uid);
 
   setInterval(async () => {
+    await checkUnreadNews(user.uid);
     await renderMissions(user.uid);
-  }, 5000);
+    await checkUnreadNews(user.uid);
+  }, 1000);
 }
 
 
@@ -4033,6 +4276,12 @@ async function renderDailyQuests(uid) {
   const dailyQuestsList = document.getElementById("dailyQuestsList");
   if (!dailyQuestsList) return;
 
+  const dailyQuestTimer = document.getElementById("dailyQuestTimer");
+
+  if (dailyQuestTimer) {
+    dailyQuestTimer.innerText = `Les quêtes quotidiennes se réinitialisent dans : ${formatDailyResetTimer()}`;
+  }
+
   dailyQuestsList.innerHTML = DAILY_QUESTS.map(quest => {
     const progress = daily.progress[quest.type] || 0;
     const percent = Math.min(100, (progress / quest.target) * 100);
@@ -4063,7 +4312,8 @@ async function renderDailyQuests(uid) {
   });
 
   await updateUserProfile(uid, {
-    dailyQuests: profile.dailyQuests
+    dailyQuests: profile.dailyQuests,
+    badges: profile.badges,
   });
 }
 
@@ -4078,12 +4328,12 @@ async function claimDailyQuest(uid, questId) {
 
   const progress = daily.progress[quest.type] || 0;
   if (progress < quest.target) {
-    showToast("Quête pas encore terminée.");
+    showToast("Quête pas encore terminée.", "error");
     return;
   }
 
   if (daily.claimed.includes(quest.id)) {
-    showToast("Récompense déjà récupérée.");
+    showToast("Récompense déjà récupérée.", "error");
     return;
   }
 
@@ -4096,13 +4346,18 @@ async function claimDailyQuest(uid, questId) {
 
   profile.history.unshift(`Quête quotidienne terminée : ${quest.title} +${formatMoney(quest.reward)}`);
 
+  addXp(profile, 100, "Quête quotidienne");
+  handleBadges(profile);
+
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     dailyQuests: profile.dailyQuests,
-    history: profile.history
+    history: profile.history,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
-  showToast(`✅ Quête terminée : ${quest.title} +${formatMoney(quest.reward)}`);
+  showToast(`✅ Quête terminée : ${quest.title} +${formatMoney(quest.reward)}`, "success");
 }
 
 
@@ -4125,7 +4380,7 @@ async function doPrestige(uid) {
   const requirement = getPrestigeRequirement(currentLevel);
 
   if (netWorth < requirement) {
-    showToast(`Il faut ${formatMoney(requirement)} de richesse pour faire un prestige.`);
+    showToast(`Il faut ${formatMoney(requirement)} de richesse pour faire un prestige.`, "error");
     return;
   }
 
@@ -4143,6 +4398,7 @@ async function doPrestige(uid) {
   profile.activeAccount = "Principal";
   profile.clickValue = 1;
   profile.clickLevel = 1;
+  profile.xp = 0;
   profile.totalClicks = 0;
   profile.investments = {};
   profile.crypto = {
@@ -4171,7 +4427,7 @@ async function doPrestige(uid) {
     type: "prestige"
   });
 
-  showToast("🔔 Nouvelle news disponible : prestige atteint !");
+  showToast("🔔 Nouvelle news disponible : prestige atteint !", "success");
 
   await updateUserProfile(uid, {
     prestige: profile.prestige,
@@ -4187,9 +4443,11 @@ async function doPrestige(uid) {
     completedMissions: profile.completedMissions,
     dailyQuests: profile.dailyQuests,
     totalClicks: profile.totalClicks,
+    xp: profile.xp,
+    badges: profile.badges,
   });
 
-  showToast(`Prestige réussi ! Niveau ${profile.prestige.level}`);
+  showToast(`Prestige réussi ! Niveau ${profile.prestige.level}`, "success");
   await renderMissions(uid);
 }
 
@@ -4197,52 +4455,66 @@ async function doPrestige(uid) {
 
 const NEWS_EVENTS = [
   {
+    id: "btc_crash",
+    title: "Crash brutal du Bitcoin",
+    description: "Une vente massive fait chuter le BTC. Les traders paniquent.",
+    type: "market",
+    effects: [
+      { type: "asset", asset: "BTC", percent: -25 }
+    ]
+  },
+  {
+    id: "eth_update",
+    title: "Ethereum annonce une mise à jour majeure",
+    description: "ETH attire de nouveaux investisseurs après une annonce technique.",
+    type: "market",
+    effects: [
+      { type: "asset", asset: "ETH", percent: 18 }
+    ]
+  },
+  {
     id: "apple_bad_sales",
-    title: "Apple annonce des ventes décevantes",
-    description: "Les investisseurs perdent confiance, l'action AAPL chute fortement.",
+    title: "Apple vend moins que prévu",
+    description: "AAPL chute après des résultats décevants.",
+    type: "market",
     effects: [
       { type: "asset", asset: "AAPL", percent: -18 }
     ]
   },
   {
-    id: "apple_ai_hype",
-    title: "Apple annonce une IA révolutionnaire",
-    description: "Le marché réagit très positivement à l'annonce.",
+    id: "tesla_hype",
+    title: "Tesla annonce une nouvelle technologie",
+    description: "TSLA explose après une annonce très attendue.",
+    type: "market",
     effects: [
-      { type: "asset", asset: "AAPL", percent: 22 }
+      { type: "asset", asset: "TSLA", percent: 22 }
     ]
   },
   {
-    id: "tesla_recall",
-    title: "Tesla rappelle plusieurs modèles",
-    description: "TSLA subit une forte pression sur le marché.",
+    id: "nvidia_ai_boom",
+    title: "Nvidia domine l’IA",
+    description: "NVDA progresse fortement grâce à la demande en intelligence artificielle.",
+    type: "market",
     effects: [
-      { type: "asset", asset: "TSLA", percent: -15 }
+      { type: "asset", asset: "NVDA", percent: 20 }
     ]
   },
   {
-    id: "bitcoin_bullrun",
-    title: "Le Bitcoin repart en bull run",
-    description: "Le marché crypto s'emballe.",
+    id: "global_crisis",
+    title: "Crise économique mondiale",
+    description: "Tous les marchés chutent fortement.",
+    type: "market",
     effects: [
-      { type: "asset", asset: "BTC", percent: 25 },
-      { type: "asset", asset: "ETH", percent: 12 }
+      { type: "allAssets", percent: -15 }
     ]
   },
   {
-    id: "market_crash",
-    title: "Panique générale sur les marchés",
-    description: "Toutes les actions et cryptos chutent brutalement.",
+    id: "economic_boom",
+    title: "Croissance économique exceptionnelle",
+    description: "Les marchés repartent à la hausse.",
+    type: "market",
     effects: [
-      { type: "allAssets", percent: -12 }
-    ]
-  },
-  {
-    id: "startup_boom",
-    title: "Boom économique pour les entreprises",
-    description: "Les investissements passifs rapportent temporairement plus.",
-    effects: [
-      { type: "passiveBoost", value: 2, durationMs: 10 * 60 * 1000 }
+      { type: "allAssets", percent: 12 }
     ]
   }
 ];
@@ -4305,18 +4577,33 @@ async function triggerRandomNews() {
 }
 
 
-function showToast(message) {
-  const oldToast = document.querySelector(".toast");
-  if (oldToast) oldToast.remove();
+function showToast(message, type = "info") {
+  let container = document.getElementById("toastContainer");
+
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    document.body.appendChild(container);
+  }
 
   const toast = document.createElement("div");
-  toast.className = "toast";
-  toast.innerText = message;
+  toast.className = `toast ${type}`;
 
-  document.body.appendChild(toast);
+  // Icônes selon type
+  let icon = "ℹ️";
+  if (type === "success") icon = "✅";
+  if (type === "error") icon = "❌";
+  if (type === "warning") icon = "⚠️";
+  if (type === "xp") icon = "✨";
+  if (type === "level") icon = "⭐";
+
+  toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
+
+  container.appendChild(toast);
 
   setTimeout(() => {
-    toast.remove();
+    toast.classList.add("hide");
+    setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
@@ -4373,7 +4660,7 @@ function getNewsIcon(type) {
   return "📰";
 }
 
-function bindNewsPopup() {
+function bindNewsPopup(uid = currentUserUid) {
   const newsBellBtn = document.getElementById("newsBellBtn");
   const closeNewsPopupBtn = document.getElementById("closeNewsPopupBtn");
   const newsPopup = document.getElementById("newsPopup");
@@ -4381,6 +4668,10 @@ function bindNewsPopup() {
   if (newsBellBtn) {
     newsBellBtn.onclick = async () => {
       await openNewsPopup();
+
+      if (uid) {
+        await markNewsAsRead(uid);
+      }
     };
   }
 
@@ -4396,6 +4687,10 @@ function bindNewsPopup() {
         newsPopup.style.display = "none";
       }
     };
+  }
+
+  if (uid) {
+    checkUnreadNews(uid);
   }
 }
 
@@ -4420,6 +4715,33 @@ async function addNewsHistoryItem(newsItem) {
   await setDoc(doc(db, "game", "newsHistory"), {
     items: updatedHistory
   });
+
+  showToast("📰 Nouvelle news disponible !", "info");
+
+  const currentUserProfile = window.currentUserUid;
+  if (currentUserProfile) {
+    await checkUnreadNews(currentUserProfile);
+  }
+}
+
+function getNextDailyResetTime() {
+  const now = new Date();
+  const next = new Date(now);
+
+  next.setHours(24, 0, 0, 0); // minuit prochain
+
+  return next.getTime();
+}
+
+function formatDailyResetTimer() {
+  const remaining = getNextDailyResetTime() - Date.now();
+
+  const totalSeconds = Math.max(0, Math.floor(remaining / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 
@@ -4465,6 +4787,189 @@ function animateNumber(el, newValue, formatter = formatMoney) {
   requestAnimationFrame(frame);
 }
 
+/* ================= BADGES ================ */
+
+const BADGES = [
+  {
+    id: "first_click",
+    name: "Premier clic",
+    desc: "Faire 1 clic",
+    icon: "🖱️",
+    rarity: "common",
+    check: p => (p.totalClicks || 0) >= 1
+  },
+  {
+    id: "first_100_clicks",
+    name: "Cliqueur",
+    desc: "Faire 100 clics",
+    icon: "⚡",
+    rarity: "common",
+    check: p => (p.totalClicks || 0) >= 100
+  },
+  {
+    id: "first_million",
+    name: "Premier million",
+    desc: "Atteindre 1 000 000 €",
+    icon: "💰",
+    rarity: "rare",
+    check: p => getUserNetWorth(p) >= 1_000_000
+  },
+  {
+    id: "crypto_master",
+    name: "Trader",
+    desc: "Acheter de la crypto ou une action",
+    icon: "📈",
+    rarity: "rare",
+    check: p => Object.values(p.crypto?.assets || {}).some(a => (a.owned || 0) > 0)
+  },
+  {
+    id: "investor",
+    name: "Investisseur",
+    desc: "Acheter un investissement passif",
+    icon: "🏢",
+    rarity: "rare",
+    check: p => Object.keys(p.investments || {}).length > 0
+  },
+  {
+    id: "prestige_1",
+    name: "Prestige",
+    desc: "Faire un prestige",
+    icon: "⭐",
+    rarity: "epic",
+    check: p => (p.prestige?.level || 0) >= 1
+  },
+  {
+    id: "prestige_5",
+    name: "Légende prestige",
+    desc: "Atteindre le prestige 5",
+    icon: "👑",
+    rarity: "legendary",
+    check: p => (p.prestige?.level || 0) >= 5
+  },
+  {
+    id: "level_25_badge",
+    name: "Maître financier",
+    desc: "Atteindre le niveau 25",
+    icon: "💎",
+    rarity: "legendary",
+    check: p => getLevelFromXp(p.xp || 0).level >= 25
+  }
+];
+function checkBadges(profile) {
+  profile.badges = profile.badges || [];
+
+  let newBadges = [];
+
+  for (const badge of BADGES) {
+    if (!profile.badges.includes(badge.id) && badge.check(profile)) {
+      profile.badges.push(badge.id);
+      newBadges.push(badge);
+      if (badge.rarity === "legendary") {
+        addNewsHistoryItem({
+          title: "🏆 Badge légendaire débloqué",
+          description: `${profile.displayName || profile.username || "Un joueur"} vient de débloquer le badge légendaire : ${badge.name}.`,
+          type: "success"
+        });
+      }
+    }
+  }
+
+  return newBadges;
+}
+
+function showBadgePopup(badge) {
+  const popup = document.createElement("div");
+  popup.className = "badge-popup";
+
+  popup.innerHTML = `
+    <div class="badge-popup-content">
+      <div class="badge-icon">${badge.icon}</div>
+      <div>
+        <h3>Nouveau badge débloqué !</h3>
+        <p>${badge.name}</p>
+        <span>${badge.desc}</span>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  setTimeout(() => popup.classList.add("show"), 50);
+
+  setTimeout(() => {
+    popup.classList.remove("show");
+    setTimeout(() => popup.remove(), 400);
+  }, 4000);
+}
+
+function handleBadges(profile) {
+  const newBadges = checkBadges(profile);
+
+  newBadges.forEach(b => {
+    showBadgePopup(b);
+    showToast(`🎖️ Badge débloqué : ${b.name}`, "success");
+  });
+}
+
+
+/* =================== PROFIL ============== */
+
+async function renderProfile(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  updateAdminNavVisibility(profile);
+  applyUserTheme(profile);
+
+  const profileAvatar = document.getElementById("profileAvatar");
+  const profileName = document.getElementById("profileName");
+  const profileInfo = document.getElementById("profileInfo");
+  const profileStats = document.getElementById("profileStats");
+  const profileBadgesGrid = document.getElementById("profileBadgesGrid");
+  const badgesCount = document.getElementById("badgesCount");
+
+  const levelData = getLevelFromXp(profile.xp || 0);
+  const prestigeLevel = profile.prestige?.level || 0;
+  const netWorth = getUserNetWorth(profile);
+  const unlockedBadges = profile.badges || [];
+
+  if (profileAvatar) {
+    profileAvatar.innerText = prestigeLevel > 0 ? "⭐" : "👤";
+  }
+
+  if (profileName) {
+    profileName.innerText = profile.displayName || profile.username || profile.email || "Joueur";
+  }
+
+  if (profileInfo) {
+    profileInfo.innerText = `Niveau ${levelData.level} • Prestige ${prestigeLevel}`;
+  }
+
+  if (profileStats) {
+    profileStats.innerText = `Richesse : ${formatMoney(netWorth)} • Clics : ${(profile.totalClicks || 0).toLocaleString("fr-FR")}`;
+  }
+
+  if (badgesCount) {
+    badgesCount.innerText = `${unlockedBadges.length} badge(s) débloqué(s)`;
+  }
+
+  if (profileBadgesGrid) {
+    profileBadgesGrid.innerHTML = BADGES.map(badge => {
+      const unlocked = unlockedBadges.includes(badge.id);
+      return renderBadgeCard(badge, unlocked);
+    }).join("");
+  }
+}
+
+async function initProfile(user) {
+  bindLogout();
+  bindNewsPopup(user.uid);
+  await renderProfile(user.uid);
+    setInterval(async () => {
+    await checkUnreadNews(user.uid);
+  }, 5000);
+}
+
 /* ================= BOOT ================= */
 
 watchAuth(async (user) => {
@@ -4473,6 +4978,9 @@ watchAuth(async (user) => {
     return;
   }
 
+  currentUserUid = user.uid;
+  window.currentUserUid = user.uid;
+
   if (page === "home") await initHome(user);
   if (page === "payments") await initPayments(user);
   if (page === "shop") await initShop(user);
@@ -4480,5 +4988,6 @@ watchAuth(async (user) => {
   if (page === "investments") await initInvestments(user);
   if (page === "leaderboard") await initLeaderboard(user);
   if (page === "missions") await initMissions(user);
+  if (page === "profile") await initProfile(user);
   if (page === "admin") await initAdmin(user);
 });

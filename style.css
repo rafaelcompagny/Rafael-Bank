@@ -1316,3 +1316,263 @@ nav a small {
   45% { transform: scale(1.45) rotate(8deg); filter: brightness(2.4); }
   100% { transform: scale(1.15) rotate(0deg); filter: brightness(1.3); }
 }
+
+
+
+
+/* ===== MOBILE POLISH FINAL ===== */
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  body {
+    zoom: 1;
+    font-size: 14px;
+  }
+
+  .container {
+    padding: 10px;
+    padding-bottom: 95px;
+  }
+
+  .card {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  h1 {
+    font-size: 1.65rem;
+  }
+
+  h2 {
+    font-size: 1.28rem;
+  }
+
+  h3 {
+    font-size: 1.08rem;
+  }
+
+  p,
+  .small {
+    font-size: 0.82rem;
+  }
+
+  button,
+  .btn-link,
+  input,
+  select {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+    border-radius: 12px;
+  }
+
+  #clickBtn {
+    min-height: 56px;
+    font-size: 1.1rem;
+    font-weight: 900;
+    border-radius: 18px;
+  }
+
+  .row {
+    gap: 7px;
+  }
+
+  nav {
+    padding: 6px;
+  }
+
+  nav a {
+    min-width: 58px;
+    padding: 6px 7px;
+  }
+
+  nav a span {
+    font-size: 1.2rem;
+  }
+
+  nav a small {
+    font-size: 0.58rem;
+  }
+
+  .shop-card,
+  .investment-card,
+  .mission-card {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .shop-card h3 {
+    font-size: 1.35rem;
+  }
+
+  .shop-price {
+    font-size: 1.2rem;
+  }
+}
+
+
+@media (max-width: 768px) {
+  .login-wrap {
+    min-height: auto;
+    padding-top: 20px;
+  }
+
+  .login-wrap .card {
+    margin-bottom: 20px;
+  }
+
+  .login-wrap .row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  #googleLoginBtn,
+  #forgotPasswordBtn {
+    display: block;
+    width: 100%;
+  }
+}
+
+
+
+/* ===== MONEY POP ===== */
+
+#moneyPopContainer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3000;
+}
+
+.money-pop {
+  position: fixed;
+  font-weight: 900;
+  color: #7CFFB2;
+  text-shadow: 0 0 12px rgba(124,255,178,0.6);
+  animation: moneyPop 1s ease forwards;
+}
+
+@keyframes moneyPop {
+  0% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-70px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+
+/* ===== PREMIUM BUTTON GLOW ===== */
+
+button {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(120, 100, 255, 0.28);
+  filter: brightness(1.08);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+body.visual-premium button:not(:disabled) {
+  box-shadow: 0 0 18px rgba(190, 110, 255, 0.16);
+}
+
+body.visual-premium button:hover:not(:disabled) {
+  box-shadow: 0 0 28px rgba(190, 110, 255, 0.35);
+}
+
+/* ===== ULTRA LOOTBOX ===== */
+
+.lootbox-modal-content.legendary {
+  animation: legendaryPulse 1s infinite alternate;
+  border-color: rgba(255, 215, 90, 0.8);
+  box-shadow:
+    0 0 40px rgba(255, 215, 90, 0.35),
+    0 0 90px rgba(255, 120, 255, 0.25);
+}
+
+.lootbox-animation.legendary {
+  animation: legendaryLoot 1.2s ease forwards;
+}
+
+@keyframes legendaryPulse {
+  from {
+    box-shadow: 0 0 35px rgba(255, 215, 90, 0.3);
+  }
+  to {
+    box-shadow: 0 0 75px rgba(255, 215, 90, 0.7);
+  }
+}
+
+@keyframes legendaryLoot {
+  0% {
+    transform: scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.6) rotate(15deg);
+    filter: brightness(3);
+  }
+  70% {
+    transform: scale(1.25) rotate(-8deg);
+  }
+  100% {
+    transform: scale(1.15) rotate(0deg);
+    filter: brightness(1.7);
+  }
+}
+
+
+
+/* ===== THEMES ===== */
+
+body.theme-pink {
+  background:
+    radial-gradient(circle at top right, rgba(255, 95, 180, 0.22), transparent 28%),
+    linear-gradient(180deg, #160018, #080014);
+}
+
+body.theme-gold {
+  background:
+    radial-gradient(circle at top right, rgba(255, 210, 90, 0.22), transparent 28%),
+    linear-gradient(180deg, #1a1200, #080600);
+}
+
+body.theme-red {
+  background:
+    radial-gradient(circle at top right, rgba(255, 60, 80, 0.22), transparent 28%),
+    linear-gradient(180deg, #190006, #080003);
+}
+
+body.theme-white {
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,0.7), transparent 30%),
+    linear-gradient(180deg, #f4f6ff, #dde4ff);
+  color: #101728;
+}
+
+body.theme-white .card,
+body.theme-white .shop-section,
+body.theme-white .shop-hero {
+  background: rgba(255,255,255,0.82);
+  color: #101728;
+  border-color: rgba(10,20,40,0.12);
+}
+
+body.theme-white .small {
+  color: rgba(10,20,40,0.7);
+}

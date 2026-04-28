@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Connexion - Rafael Bank</title>
   <link rel="shortcut icon" href="img/logo.jpg">
   <link rel="stylesheet" href="style.css">
@@ -49,6 +49,7 @@
             email: cred.user.email,
             username: cred.user.displayName || cred.user.email.split("@")[0],
             displayName: cred.user.displayName || cred.user.email.split("@")[0],
+            createdAt: Date.now(),
             iban: generateFakeIban(),
             createdAt: Date.now(),
             isAdmin: false,
@@ -121,6 +122,7 @@
           email,
           username: email.split("@")[0],
           displayName: email.split("@")[0],
+          createdAt: Date.now(),
           iban: generateFakeIban(),
           isAdmin: false,
           accounts: {

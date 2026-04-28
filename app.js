@@ -72,6 +72,20 @@ function getDynamicLoanAmounts(profile) {
   return loansByLevel[level] || loansByLevel[1];
 }
 
+function applyUserTheme(profile) {
+  document.body.classList.remove(
+    "theme-pink",
+    "theme-gold",
+    "theme-red",
+    "theme-white"
+  );
+
+  const theme = profile.shop?.activeTheme;
+
+  if (theme) {
+    document.body.classList.add(`theme-${theme}`);
+  }
+}
 
 function formatMoney(value) {
   const n = Number(value || 0);
@@ -235,6 +249,7 @@ function getRandomDailyReward() {
 async function renderHome(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   ensureAdminOwnsEverything(profile);
   document.body.classList.toggle("visual-premium", !!profile.shop?.visualPack || !!profile.isAdmin);
@@ -310,7 +325,7 @@ async function renderHome(uid) {
   const loanBtn2 = document.getElementById("loanBtn2");
   const loanBtn3 = document.getElementById("loanBtn3");
 
-  if (balanceEl) balanceEl.innerText = formatMoney(balance);
+  if (balanceEl) animateNumber(balanceEl, balance);
   if (welcomeEl) {
     welcomeEl.innerText = `Bienvenue ${profile.displayName || profile.username} • Compte actif : ${activeAccount}`;
   }
@@ -553,6 +568,7 @@ async function renderHome(uid) {
   async function takeLoanFirebase(uid, amount) {
     const profile = await getUserProfile(uid);
     if (!profile) return;
+    applyUserTheme(profile);
 
     const activeAccount = profile.activeAccount || "Principal";
     const repayment = amount * 1.2;
@@ -590,6 +606,7 @@ async function renderHome(uid) {
 async function repayAllLoansFirebase(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const activeAccount = profile.activeAccount || "Principal";
   if (!profile.accounts) profile.accounts = {};
@@ -640,6 +657,7 @@ async function repayAllLoansFirebase(uid) {
 async function autoLoanPaymentFirebase(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const activeAccount = profile.activeAccount || "Principal";
   const loans = profile.loans || [];
@@ -699,6 +717,7 @@ async function autoLoanPaymentFirebase(uid) {
 async function renderInvestmentsInsideCrypto(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const incomeEl = document.getElementById("investmentIncomeInfo");
   const grid = document.getElementById("investmentsShop");
@@ -754,6 +773,7 @@ async function renderInvestmentsInsideCrypto(uid) {
 async function buyInvestment(uid, investmentId) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const investment = INVESTMENTS.find(inv => inv.id === investmentId);
   if (!investment) return;
@@ -792,6 +812,7 @@ async function buyInvestment(uid, investmentId) {
 async function applyPassiveIncome(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const activeAccount = profile.activeAccount || "Principal";
 
@@ -903,6 +924,7 @@ async function initHome(user) {
         limitedMultiplier *
         prestigeMultiplier;
 
+      showMoneyPop(gain);
       profile.totalClicks = (profile.totalClicks || 0) + 1;
       addDailyQuestProgress(profile, "clicks", 1);
       addDailyQuestProgress(profile, "earnMoney", gain);
@@ -1260,6 +1282,7 @@ function paginateItems(items, page, perPage) {
 async function renderPayments(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   updateAdminNavVisibility(profile);
 
@@ -1467,6 +1490,7 @@ async function initPayments(user) {
 async function renderCards(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   ensureAdminOwnsEverything(profile);
 document.body.classList.toggle("visual-premium", !!profile.shop?.visualPack || !!profile.isAdmin);
@@ -2546,6 +2570,54 @@ const SHOP_ITEMS = {
       rewardValue: 10,
       theme: "dark",
       visual: "10X"
+    },
+    {
+      id: "theme_pink_fake",
+      title: "Thème Rose",
+      subtitle: "Change les couleurs de l’interface",
+      priceLabel: "250 000 € (jeu)",
+      type: "fake",
+      fakePrice: 250000,
+      rewardType: "theme",
+      rewardValue: "pink",
+      badge: "Skin",
+      visual: "🌸"
+    },
+    {
+      id: "theme_gold_fake",
+      title: "Thème Or",
+      subtitle: "Interface luxe dorée",
+      priceLabel: "750 000 € (jeu)",
+      type: "fake",
+      fakePrice: 750000,
+      rewardType: "theme",
+      rewardValue: "gold",
+      badge: "Skin",
+      visual: "🏆"
+    },
+    {
+      id: "theme_red_fake",
+      title: "Thème Rouge",
+      subtitle: "Interface rouge néon",
+      priceLabel: "500 000 € (jeu)",
+      type: "fake",
+      fakePrice: 500000,
+      rewardType: "theme",
+      rewardValue: "red",
+      badge: "Skin",
+      visual: "🔴"
+    },
+    {
+      id: "theme_white_fake",
+      title: "Thème Blanc",
+      subtitle: "Interface claire premium",
+      priceLabel: "1 000 000 € (jeu)",
+      type: "fake",
+      fakePrice: 1000000,
+      rewardType: "theme",
+      rewardValue: "white",
+      badge: "Skin",
+      visual: "🤍"
     }
   ]
 }
@@ -2724,6 +2796,7 @@ function buildShopCard(item, variant = "featured", profile = null) {
 async function purchaseShopItem(uid, itemId) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const limitedOffer = getCurrentLimitedOffer();
 
@@ -2937,8 +3010,18 @@ async function purchaseShopItem(uid, itemId) {
 
       profile.history.unshift(`Offre limitée : ${item.title}`);
       break;
+      }
+      case "theme": {
+        profile.shop.ownedThemes = profile.shop.ownedThemes || [];
+        if (!profile.shop.ownedThemes.includes(item.rewardValue)) {
+          profile.shop.ownedThemes.push(item.rewardValue);
+        }
+
+        profile.shop.activeTheme = item.rewardValue;
+        profile.history.unshift(`Thème acheté : ${item.title}`);
+        break;
+      }
     }
-  }
 
   await updateUserProfile(uid, {
     accounts: profile.accounts,
@@ -2957,6 +3040,7 @@ async function purchaseShopItem(uid, itemId) {
 async function renderShop(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   ensureAdminOwnsEverything(profile);
   document.body.classList.toggle("visual-premium", !!profile.shop?.visualPack || !!profile.isAdmin);
@@ -2987,7 +3071,18 @@ async function renderShop(uid) {
   }
 
   if (premiumPacksGrid) {
-    premiumPacksGrid.innerHTML = SHOP_ITEMS.premium.map(item => buildShopCard(item, "premium", profile)).join("");
+    const accountCreatedAt = profile.createdAt || profile.creationTime || Date.now();
+
+    const premiumItems = SHOP_ITEMS.premium.filter(item => {
+      if (!item.limitedToDays) return true;
+
+      const endAt = accountCreatedAt + item.limitedToDays * 24 * 60 * 60 * 1000;
+      return Date.now() < endAt;
+    });
+
+    premiumPacksGrid.innerHTML = premiumItems
+      .map(item => buildShopCard(item, "premium", profile))
+      .join("");
   }
 
   const limitedOffer = getCurrentLimitedOffer();
@@ -3251,6 +3346,7 @@ async function rewardLeaderboardTop(uid, ranking) {
 
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const now = Date.now();
   const interval = 60 * 1000;
@@ -3318,16 +3414,16 @@ const LOOTBOX_REWARDS = [
   { chance: 45, type: "money", value: 5000, label: "5 000 €" },
   { chance: 25, type: "money", value: 25000, label: "25 000 €" },
   { chance: 15, type: "boost", durationMs: 60 * 1000, label: "Boost x2 pendant 1 min" },
-  { chance: 10, type: "crypto", asset: "BTC", quantity: 0.0002, label: "0.0002 BTC" },
-  { chance: 5, type: "money", value: 250000, label: "Jackpot 250 000 €" }
+  { chance: 10, type: "crypto", asset: "BTC", quantity: 0.0002, label: "0.0002 BTC", rarity: "rare" },
+  { chance: 5, type: "money", value: 250000, label: "Jackpot 250 000 €", rarity: "legendary" }
 ];
 
 const MEGA_LOOTBOX_REWARDS = [
   { chance: 35, type: "money", value: 100000, label: "100 000 €" },
   { chance: 25, type: "boost", durationMs: 5 * 60 * 1000, label: "Boost x2 pendant 5 min" },
   { chance: 20, type: "crypto", asset: "ETH", quantity: 0.05, label: "0.05 ETH" },
-  { chance: 15, type: "money", value: 1000000, label: "1 000 000 €" },
-  { chance: 5, type: "permanentMultiplier", value: 2, label: "x2 à vie" }
+  { chance: 15, type: "money", value: 1000000, label: "1 000 000 €", rarity: "rare" },
+  { chance: 5, type: "permanentMultiplier", value: 2, label: "x2 à vie", rarity: "legendary" }
 ];
 
 function drawLootboxReward(isMega = false) {
@@ -3453,8 +3549,8 @@ const PREMIUM_LOOTBOX_REWARDS = [
   { chance: 25, type: "boost", durationMs: 15 * 60 * 1000, label: "Boost x2 pendant 15 min" },
   { chance: 20, type: "crypto", asset: "BTC", quantity: 50, label: "50 BTC" },
   { chance: 15, type: "permanentMultiplier", value: 2, label: "x2 à vie" },
-  { chance: 8, type: "card", cardType: "black", label: "Carte Black" },
-  { chance: 2, type: "visualPack", label: "Pack Premium Visuel" }
+  { chance: 8, type: "card", cardType: "black", label: "Carte Black", rarity: "rare" },
+  { chance: 2, type: "visualPack", label: "Pack Premium Visuel", rarity: "legendary" }
 ];
 
 function getLootboxTable(table) {
@@ -3496,8 +3592,14 @@ async function openLootboxWithAnimation(uid, item) {
   setTimeout(async () => {
     const profile = await getUserProfile(uid);
     if (!profile) return;
+    applyUserTheme(profile);
 
     const reward = drawLootboxRewardByTable(item.table);
+    const modalContent = document.querySelector(".lootbox-modal-content");
+
+    if (reward.rarity === "legendary") {
+      modalContent?.classList.add("legendary");
+    }
 
     await applyLootboxReward(profile, reward);
 
@@ -3510,7 +3612,7 @@ async function openLootboxWithAnimation(uid, item) {
       card: profile.card
     });
 
-    animation.classList.add("opened");
+    animation.classList.add(reward.rarity === "legendary" ? "legendary" : "opened");
     animation.innerText = "✨";
     title.innerText = "Récompense obtenue !";
     text.innerText = reward.label;
@@ -3548,6 +3650,7 @@ function bindLootboxModals() {
       if (lootboxModal) lootboxModal.style.display = "none";
     };
   }
+  document.querySelector(".lootbox-modal-content")?.classList.remove("legendary");
 
   if (closeLootboxInfoBtn) {
     closeLootboxInfoBtn.onclick = () => {
@@ -3562,6 +3665,7 @@ function bindLootboxModals() {
 async function renderInvestmentsPage(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   updateAdminNavVisibility(profile);
 
@@ -3675,7 +3779,7 @@ const MISSIONS = [
     title: "Millairdaire",
     description: "Atteindre 1 000 000 000 € de richesse totale",
     reward: 1000000,
-    check: profile => getUserNetWorth(profile) >= 1000000
+    check: profile => getUserNetWorth(profile) >= 1000000000
   },
   {
     id: "first_prestige",
@@ -3696,6 +3800,7 @@ const MISSIONS = [
 async function checkAndClaimMissions(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   profile.completedMissions = profile.completedMissions || [];
   profile.accounts = profile.accounts || { Principal: 0 };
@@ -3730,6 +3835,7 @@ async function checkAndClaimMissions(uid) {
 async function renderMissions(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   updateAdminNavVisibility(profile);
   await checkAndClaimMissions(uid);
@@ -3851,6 +3957,7 @@ function addDailyQuestProgress(profile, type, amount = 1) {
 async function renderDailyQuests(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const daily = ensureDailyQuests(profile);
   const dailyQuestsList = document.getElementById("dailyQuestsList");
@@ -3893,6 +4000,7 @@ async function renderDailyQuests(uid) {
 async function claimDailyQuest(uid, questId) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const daily = ensureDailyQuests(profile);
   const quest = DAILY_QUESTS.find(q => q.id === questId);
@@ -3940,6 +4048,7 @@ function getPrestigeMultiplier(profile) {
 async function doPrestige(uid) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
+  applyUserTheme(profile);
 
   const netWorth = getUserNetWorth(profile);
   const currentLevel = profile.prestige?.level || 0;
@@ -4241,6 +4350,49 @@ async function addNewsHistoryItem(newsItem) {
   await setDoc(doc(db, "game", "newsHistory"), {
     items: updatedHistory
   });
+}
+
+
+/* =============== ANNIMATION ================= */
+
+function showMoneyPop(amount) {
+  const container = document.getElementById("moneyPopContainer");
+  if (!container) return;
+
+  const pop = document.createElement("div");
+  pop.className = "money-pop";
+  pop.innerText = `+${formatMoney(amount)}`;
+
+  pop.style.left = `${Math.random() * 45 + 30}%`;
+  pop.style.top = `${Math.random() * 25 + 35}%`;
+
+  container.appendChild(pop);
+
+  setTimeout(() => pop.remove(), 1000);
+}
+
+function animateNumber(el, newValue, formatter = formatMoney) {
+  if (!el) return;
+
+  const oldValue = Number(el.dataset.value || 0);
+  const target = Number(newValue || 0);
+  const duration = 450;
+  const start = performance.now();
+
+  el.dataset.value = target;
+
+  function frame(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const value = oldValue + (target - oldValue) * progress;
+
+    el.innerText = formatter(value);
+
+    if (progress < 1) {
+      requestAnimationFrame(frame);
+    }
+  }
+
+  requestAnimationFrame(frame);
 }
 
 /* ================= BOOT ================= */

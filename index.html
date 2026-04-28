@@ -27,6 +27,7 @@
       <div class="row" style="margin-top:12px;">
         <button id="registerBtn">Créer un compte</button>
         <button class="secondary" id="loginBtn">Se connecter</button>
+        <button class="secondary" id="googleLoginBtn">Continuer avec Google</button>
         <button class="secondary" id="forgotPasswordBtn">Mot de passe oublié</button>
       </div>
 
@@ -35,8 +36,56 @@
   </div>
 
   <script type="module">
-    import { registerUser, loginUser, resetPassword } from "./auth.js";
-    import { createUserProfile } from "./db.js";
+    import { registerUser, loginUser, resetPassword, loginWithGoogle } from "./auth.js";
+    import { createUserProfile, getUserProfile } from "./db.js";
+
+    document.getElementById("googleLoginBtn").addEventListener("click", async () => {
+      try {
+        const cred = await loginWithGoogle();
+        const existingProfile = await getUserProfile(cred.user.uid);
+
+        if (!existingProfile) {
+          await createUserProfile(cred.user.uid, {
+            email: cred.user.email,
+            username: cred.user.displayName || cred.user.email.split("@")[0],
+            displayName: cred.user.displayName || cred.user.email.split("@")[0],
+            iban: generateFakeIban(),
+            createdAt: Date.now(),
+            isAdmin: false,
+            accounts: {
+              Principal: 0
+            },
+            activeAccount: "Principal",
+            clickValue: 1,
+            clickLevel: 1,
+            totalClicks: 0,
+            history: ["Compte Google créé avec succès"],
+            loans: [],
+            boost: {
+              doubleMoneyUntil: 0
+            },
+            contacts: [],
+            investments: {},
+            shop: {},
+            card: {
+              blocked: false,
+              revealed: false,
+              type: "classic"
+            },
+            crypto: {
+              currentAsset: "BTC",
+              assets: {}
+            }
+          });
+        }
+
+        window.location.href = "home.html";
+      } catch (e) {
+        console.error(e);
+        statusMsg.textContent = e.message;
+      }
+    });
+
 
     function generateFakeIban() {
       const randomPart = Array.from({ length: 23 }, () => Math.floor(Math.random() * 10)).join("");

@@ -984,3 +984,335 @@ body.visual-premium .card-back.black {
     font-size: 0.8rem;
   }
 }
+
+
+
+#cardPinSetupHome input {
+  text-align: center;
+  letter-spacing: 4px;
+  font-size: 1.2rem;
+}
+
+
+
+/* ===== MOBILE COMPACT FIX ===== */
+
+@media (max-width: 768px) {
+  button,
+  .btn-link,
+  input,
+  select {
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 0.9rem;
+  }
+
+  .row {
+    gap: 8px;
+  }
+
+  .card {
+    padding: 13px;
+  }
+
+  nav {
+    padding: 7px;
+    gap: 6px;
+  }
+
+  nav a {
+    min-width: 76px;
+    padding: 9px 10px;
+    font-size: 0.76rem;
+  }
+
+  .shop-card button,
+  .investment-card button {
+    min-height: 40px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 420px) {
+  button,
+  .btn-link,
+  input,
+  select {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
+
+  nav a {
+    min-width: 68px;
+    font-size: 0.7rem;
+    padding: 8px;
+  }
+}
+
+
+
+
+
+/* ===== MISSIONS ===== */
+
+.mission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  padding-bottom: 110px;
+}
+
+.mission-card {
+  border-radius: 24px;
+  padding: 18px;
+  background: linear-gradient(145deg, rgba(30, 40, 90, 0.95), rgba(10, 15, 35, 0.95));
+  border: 1px solid rgba(132, 99, 255, 0.18);
+  box-shadow: 0 18px 35px rgba(0,0,0,0.22);
+}
+
+.mission-card.completed {
+  border-color: rgba(89, 255, 165, 0.35);
+  background: linear-gradient(145deg, rgba(20, 92, 61, 0.75), rgba(10, 15, 35, 0.95));
+}
+
+.mission-status {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  font-weight: 800;
+}
+
+
+
+/* ===== NOTIFICATIONS / NEWS POPUP ===== */
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(67, 233, 123, 0.95), rgba(56, 249, 215, 0.95));
+  color: #06131f;
+  font-weight: 900;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+  animation: toastIn 0.35s ease, toastOut 0.35s ease 3.4s forwards;
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastOut {
+  to {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+}
+
+.news-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.news-popup-content {
+  width: min(720px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 28px;
+  padding: 22px;
+  background: linear-gradient(145deg, rgba(20, 28, 70, 0.98), rgba(7, 12, 32, 0.98));
+  border: 1px solid rgba(132, 99, 255, 0.25);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+}
+
+.news-item {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 12px;
+}
+
+.news-item h4 {
+  margin: 0 0 6px;
+}
+
+
+/* ===== MOBILE NAV ICONS ===== */
+
+nav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+nav a span {
+  font-size: 1.1rem;
+}
+
+nav a small {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  nav a {
+    flex-direction: column;
+    min-width: 64px;
+    padding: 7px 8px;
+    gap: 2px;
+  }
+
+  nav a span {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  nav a small {
+    font-size: 0.62rem;
+    line-height: 1;
+  }
+
+  button,
+  .btn-link,
+  input,
+  select {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+  }
+
+  #clickBtn {
+    min-height: 54px;
+    font-size: 1.1rem;
+    font-weight: 900;
+    border-radius: 18px;
+  }
+}
+
+
+
+/* ===== LOOTBOX ===== */
+
+.lootbox-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.lootbox-modal-content {
+  width: min(460px, 100%);
+  border-radius: 28px;
+  padding: 24px;
+  background: linear-gradient(145deg, rgba(30, 40, 100, 0.98), rgba(8, 12, 35, 0.98));
+  border: 1px solid rgba(132, 99, 255, 0.28);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.5);
+  text-align: center;
+}
+
+.lootbox-animation {
+  font-size: 6rem;
+  margin: 20px 0;
+  animation: lootboxShake 0.8s infinite;
+}
+
+.lootbox-animation.opened {
+  animation: lootboxOpen 0.9s ease forwards;
+}
+
+@keyframes lootboxShake {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-5deg) scale(1.05); }
+  50% { transform: rotate(5deg) scale(1.08); }
+  75% { transform: rotate(-3deg) scale(1.05); }
+}
+
+@keyframes lootboxOpen {
+  0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+  50% { transform: scale(1.35) rotate(8deg); filter: brightness(2); }
+  100% { transform: scale(1.1) rotate(0deg); filter: brightness(1.2); }
+}
+
+.lootbox-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.lootbox-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  gap: 8px;
+}
+
+.lootbox-info-btn {
+  min-width: 44px;
+  padding: 0;
+  font-weight: 900;
+}
+
+
+/* ===== PREMIUM LOOTBOX SUCCESS ===== */
+
+.premium-lootbox-success {
+  margin-top: 20px;
+  padding: 22px;
+  border-radius: 24px;
+  text-align: center;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.16), transparent 35%),
+    linear-gradient(145deg, rgba(91, 62, 255, 0.35), rgba(10, 15, 35, 0.95));
+  border: 1px solid rgba(180, 120, 255, 0.35);
+  box-shadow: 0 0 40px rgba(180, 120, 255, 0.22);
+}
+
+.premium-lootbox-icon {
+  font-size: 5rem;
+  margin-bottom: 12px;
+  animation: premiumLootShake 0.75s infinite;
+}
+
+.premium-lootbox-icon.opened {
+  animation: premiumLootOpen 0.9s ease forwards;
+}
+
+@keyframes premiumLootShake {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-6deg) scale(1.08); }
+  50% { transform: rotate(6deg) scale(1.12); }
+  75% { transform: rotate(-3deg) scale(1.08); }
+}
+
+@keyframes premiumLootOpen {
+  0% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+  45% { transform: scale(1.45) rotate(8deg); filter: brightness(2.4); }
+  100% { transform: scale(1.15) rotate(0deg); filter: brightness(1.3); }
+}

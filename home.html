@@ -15,6 +15,7 @@
         <p class="small" id="welcomeUser">Bienvenue</p>
       </div>
       <div class="top-actions">
+        <button id="newsBellBtn" class="secondary">🔔</button>
         <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
@@ -24,6 +25,7 @@
       <h2 id="balance">0.00 €</h2>
       <p class="small" id="clickLevelText">Gain par clic : 1 €</p>
       <p class="small" id="homePassiveIncomeText">Revenus passifs : 0 €/sec</p>
+      <p class="small" id="inflationInfo">Niveau économique : 1 • Inflation x1</p>
     </div>
     
     <p id="boostInfo" class="small"></p>
@@ -106,9 +108,9 @@
     <div class="card" style="margin-top:16px;">
       <h3>Crédits</h3>
       <div class="row">
-        <button id="loan500Btn">Crédit 500 €</button>
-        <button id="loan2000Btn">Crédit 2 000 €</button>
-        <button id="loan10000Btn">Crédit 10 000 €</button>
+        <button id="loanBtn1">Crédit</button>
+        <button id="loanBtn2">Crédit</button>
+        <button id="loanBtn3">Crédit</button>
         <button class="secondary" id="repayAllBtn">Rembourser tout</button>
       </div>
       <p id="loanInfo"></p>
@@ -127,13 +129,25 @@
   </div>
 
   <nav>
-    <a href="home.html">Accueil</a>
-    <a href="boutique.html">Boutique</a>
-    <a href="payments.html">Paiement</a>
-    <a href="crypto.html">Crypto</a>
-    <a href="leaderboard.html">Classement</a>
-    <a id="adminNavLink" href="admin.html" style="display:none;">Admin</a>
+    <a href="home.html"><span>🏠</span><small>Accueil</small></a>
+    <a href="boutique.html"><span>🛒</span><small>Boutique</small></a>
+    <a href="crypto.html"><span>📈</span><small>Crypto</small></a>
+    <a href="payments.html"><span>💸</span><small>Paiement</small></a>
+    <a href="mission.html"><span>🎯</span><small>Missions</small></a>
+    <a href="leaderboard.html"><span>🏆</span><small>Top</small></a>
+    <a id="adminNavLink" href="admin.html" style="display:none;"><span>🛡️</span><small>Admin</small></a>
   </nav>
+
+  
+  <div id="newsPopup" class="news-popup" style="display:none;">
+    <div class="news-popup-content">
+      <div class="row">
+        <h3>📰 News</h3>
+        <button id="closeNewsPopupBtn" class="secondary">Fermer</button>
+      </div>
+      <div id="newsPopupContent">Chargement...</div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

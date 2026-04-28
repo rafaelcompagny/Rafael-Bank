@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Missions - Rafael Bank</title>
+  <link rel="shortcut icon" href="img/logo.jpg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="missions">
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>Missions & Succès</h1>
+        <p class="small">Complète des objectifs pour gagner des récompenses.</p>
+      </div>
+      <button id="newsBellBtn" class="secondary">🔔</button>
+      <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
+    </div>
+
+    <div class="card prestige-card">
+        <h2>⭐ Prestige</h2>
+        <p class="small">
+            Recommence ta progression pour obtenir un bonus permanent.
+        </p>
+
+        <p id="prestigeInfo">Prestige niveau 0</p>
+        <p id="prestigeRequirement" class="small"></p>
+
+        <button id="prestigeBtn">Faire un prestige</button>
+    </div>
+
+    <h2>Quêtes quotidiennes</h2>
+    <div id="dailyQuestsList" class="mission-grid"></div>
+
+    <h2 style="margin-top:20px;">Missions & Succès</h2>
+    <div id="missionsList" class="mission-grid"></div>
+
+  <nav>
+    <a href="home.html"><span>🏠</span><small>Accueil</small></a>
+    <a href="boutique.html"><span>🛒</span><small>Boutique</small></a>
+    <a href="crypto.html"><span>📈</span><small>Crypto</small></a>
+    <a href="payments.html"><span>💸</span><small>Paiement</small></a>
+    <a href="mission.html"><span>🎯</span><small>Missions</small></a>
+    <a href="leaderboard.html"><span>🏆</span><small>Top</small></a>
+    <a id="adminNavLink" href="admin.html" style="display:none;"><span>🛡️</span><small>Admin</small></a>
+  </nav>
+
+  <div id="newsPopup" class="news-popup" style="display:none;">
+    <div class="news-popup-content">
+      <div class="row">
+        <h3>📰 News</h3>
+        <button id="closeNewsPopupBtn" class="secondary">Fermer</button>
+      </div>
+      <div id="newsPopupContent">Chargement...</div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

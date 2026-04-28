@@ -10,7 +10,10 @@ import {
   collection,
   getDocs,
   addDoc,
-  onSnapshot
+  onSnapshot,
+  doc,
+  getDoc,
+  setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const page = document.body.dataset.page;
@@ -19,8 +22,56 @@ let historyPage = 1;
 const HISTORY_PER_PAGE = 10;
 let currentAdminUid = null;
 let currentLeaderboardType = "wealth";
+const MAX_OFFLINE_PASSIVE_MS = 2 * 60 * 60 * 1000; // 2 heures
 
 /* ================= HELPE50RS ================= */
+
+
+function getPlayerWealthLevel(profile) {
+  const wealth = getUserNetWorth(profile);
+
+  if (wealth >= 1_000_000_000) return 6;
+  if (wealth >= 100_000_000) return 5;
+  if (wealth >= 10_000_000) return 4;
+  if (wealth >= 1_000_000) return 3;
+  if (wealth >= 100_000) return 2;
+  return 1;
+}
+
+function getInflationMultiplier(profile) {
+  const level = getPlayerWealthLevel(profile);
+
+  const multipliers = {
+    1: 1,
+    2: 1.25,
+    3: 1.75,
+    4: 2.5,
+    5: 4,
+    6: 7
+  };
+
+  return multipliers[level] || 1;
+}
+
+function getDynamicBoostPrice(profile) {
+  return Math.round(1000 * getInflationMultiplier(profile));
+}
+
+function getDynamicLoanAmounts(profile) {
+  const level = getPlayerWealthLevel(profile);
+
+  const loansByLevel = {
+    1: [500, 2000, 10000],
+    2: [10000, 50000, 100000],
+    3: [100000, 500000, 1000000],
+    4: [1000000, 5000000, 10000000],
+    5: [10000000, 50000000, 100000000],
+    6: [100000000, 500000000, 1000000000]
+  };
+
+  return loansByLevel[level] || loansByLevel[1];
+}
+
 
 function formatMoney(value) {
   const n = Number(value || 0);
@@ -154,7 +205,7 @@ const INVESTMENTS = [
     id: "realestate",
     name: "Immeuble locatif",
     cost: 5000000,
-    incomePerSecond: 6500,
+    incomePerSecond: 10000,
     emoji: "🏢"
   },
   {
@@ -228,13 +279,20 @@ async function renderHome(uid) {
   const starterMultiplier = now < (profile.shop?.starterBoostUntil || 0) ? 2 : 1;
   const leaderboardMultiplier =
     now < (profile.shop?.leaderboardClickMultiplierUntil || 0) ? 2 : 1;
+  const limitedMultiplier =
+    Date.now() < (profile.shop?.limitedMultiplierUntil || 0)
+      ? (profile.shop?.limitedMultiplierValue || 1)
+      : 1;
+  const prestigeMultiplier = getPrestigeMultiplier(profile);
 
   const displayedClickValue =
     clickValue *
     permanentMultiplier *
     timeBoostMultiplier *
     starterMultiplier *
-    leaderboardMultiplier;
+    leaderboardMultiplier *
+    limitedMultiplier *
+    prestigeMultiplier;
 
   const autoClickToggleBtn = document.getElementById("autoClickToggleBtn");
   const historyPrevBtn = document.getElementById("historyPrevBtn");
@@ -246,6 +304,11 @@ async function renderHome(uid) {
   const homePassiveIncomeText = document.getElementById("homePassiveIncomeText");
 
   const cardPinSetupHome = document.getElementById("cardPinSetupHome");
+
+  const boostBtn = document.getElementById("boostBtn");
+  const loanBtn1 = document.getElementById("loanBtn1");
+  const loanBtn2 = document.getElementById("loanBtn2");
+  const loanBtn3 = document.getElementById("loanBtn3");
 
   if (balanceEl) balanceEl.innerText = formatMoney(balance);
   if (welcomeEl) {
@@ -260,6 +323,7 @@ async function renderHome(uid) {
     if (timeBoostMultiplier > 1) suffix += " • x2 boost";
     if (starterMultiplier > 1) suffix += " • starter x2";
     if (leaderboardMultiplier > 1) suffix += " • TOP 1 x2";
+    if (prestigeMultiplier > 1) suffix += ` • Prestige x${prestigeMultiplier.toFixed(1)}`;
 
     clickLevelText.innerText = `Gain par clic : ${formatMoney(displayedClickValue)}${suffix}`;
   }
@@ -267,7 +331,7 @@ async function renderHome(uid) {
   const nextUpgrade = getNextUpgrade(clickLevel);
   if (clickUpgradeInfo) {
     clickUpgradeInfo.innerText = nextUpgrade
-      ? `Niveau actuel : ${formatMoney(clickLevel)} • Prochaine amélioration : ${formatMoney(nextUpgrade.cost)} € pour passer à ${formatMoney(nextUpgrade.value)} €/clic`
+      ? `Niveau actuel : ${clickLevel} • Prochaine amélioration : ${formatMoney(nextUpgrade.cost)} € pour passer à ${formatMoney(nextUpgrade.value)} €/clic`
       : `Niveau maximal atteint`;
   }
 
@@ -445,6 +509,29 @@ async function renderHome(uid) {
     homePassiveIncomeText.innerText = `Revenus passifs : ${formatMoney(getTotalPassiveIncome(profile))} / sec`;
   }
 
+  const inflationMultiplier = getInflationMultiplier(profile);
+  const wealthLevel = getPlayerWealthLevel(profile);
+  const dynamicBoostPrice = getDynamicBoostPrice(profile);
+  const dynamicLoans = getDynamicLoanAmounts(profile);
+
+  if (boostBtn) {
+    boostBtn.innerText = `x2 argent (1 min) — ${formatMoney(dynamicBoostPrice)}`;
+  }
+
+  const loanButtons = [loanBtn1, loanBtn2, loanBtn3];
+
+  loanButtons.forEach((btn, index) => {
+    if (!btn) return;
+    const amount = dynamicLoans[index];
+    btn.innerText = `Crédit ${formatMoney(amount)}`;
+    btn.dataset.loanAmount = amount;
+  });
+
+  const inflationInfo = document.getElementById("inflationInfo");
+  if (inflationInfo) {
+    inflationInfo.innerText = `Niveau économique : ${wealthLevel} • Inflation x${inflationMultiplier}`;
+  }
+
   if (investmentsList) {
     investmentsList.innerHTML = INVESTMENTS.map(inv => {
       const qty = profile.investments[inv.id] || 0;
@@ -511,7 +598,7 @@ async function repayAllLoansFirebase(uid) {
 
   let balance = profile.accounts[activeAccount] || 0;
   if (profile.loans.length === 0) {
-    alert("Aucun crédit à rembourser.");
+    showToast("Aucun crédit à rembourser.");
     return;
   }
 
@@ -519,7 +606,7 @@ async function repayAllLoansFirebase(uid) {
   const amountToPay = Math.min(balance, totalDebt);
 
   if (amountToPay <= 0) {
-    alert("Pas assez d'argent.");
+    showToast("Pas assez d'argent.");
     return;
   }
 
@@ -628,7 +715,8 @@ async function renderInvestmentsInsideCrypto(uid) {
 
   grid.innerHTML = INVESTMENTS.map(inv => {
     const qty = profile.investments[inv.id] || 0;
-    const canBuy = balance >= inv.cost;
+    const finalCost = Math.round(inv.cost * getInflationMultiplier(profile));
+    const canBuy = balance >= finalCost;
 
     return `
       <div class="investment-card">
@@ -640,7 +728,7 @@ async function renderInvestmentsInsideCrypto(uid) {
           <p class="small">Génère automatiquement de l'argent.</p>
 
           <div class="investment-stats">
-            <div class="investment-stat">Prix : <strong>${formatMoney(inv.cost)}</strong></div>
+            <div class="investment-stat">Prix : <strong>${formatMoney(finalCost)}</strong></div>
             <div class="investment-stat">Gain : <strong>${formatMoney(inv.incomePerSecond)} / sec</strong></div>
             <div class="investment-stat">Revenu actuel : <strong>${formatMoney(qty * inv.incomePerSecond)} / sec</strong></div>
           </div>
@@ -677,21 +765,25 @@ async function buyInvestment(uid, investmentId) {
   profile.history = profile.history || [];
 
   const balance = profile.accounts[activeAccount] || 0;
+  const finalCost = Math.round(investment.cost * getInflationMultiplier(profile));
 
-  if (balance < investment.cost) {
-    alert("Pas assez d'argent pour acheter cet investissement.");
+  if (balance < finalCost) {
+    showToast("Pas assez d'argent pour acheter cet investissement.");
     return;
   }
 
-  profile.accounts[activeAccount] = balance - investment.cost;
+  profile.accounts[activeAccount] = balance - finalCost;
   profile.investments[investment.id] = (profile.investments[investment.id] || 0) + 1;
 
-  profile.history.unshift(`Investissement acheté : ${investment.name} -${investment.cost.toFixed(2)} €`);
+  profile.history.unshift(`Investissement acheté : ${investment.name} -${formatMoney(finalCost)}`);
+
+  addDailyQuestProgress(profile, "investmentBuy", 1);
 
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     investments: profile.investments,
-    history: profile.history
+    history: profile.history,
+    dailyQuests: profile.dailyQuests
   });
 
   await renderHome(uid);
@@ -705,10 +797,14 @@ async function applyPassiveIncome(uid) {
 
   profile.accounts = profile.accounts || { Principal: 0 };
   profile.investments = profile.investments || {};
+  profile.history = profile.history || [];
 
   const now = Date.now();
   const last = profile.lastPassiveIncome || now;
-  const deltaSeconds = Math.max(0, (now - last) / 1000);
+
+  const elapsedMs = Math.max(0, now - last);
+  const cappedElapsedMs = Math.min(elapsedMs, MAX_OFFLINE_PASSIVE_MS);
+  const deltaSeconds = cappedElapsedMs / 1000;
 
   let gain = 0;
 
@@ -717,24 +813,33 @@ async function applyPassiveIncome(uid) {
     gain += qty * inv.incomePerSecond * deltaSeconds;
   });
 
+  profile.lastPassiveIncome = now;
+
+  if (elapsedMs > MAX_OFFLINE_PASSIVE_MS) {
+    profile.history.unshift(
+      `Revenus passifs limités à 2h : +${formatMoney(gain)}`
+    );
+  }
+
   if (gain <= 0) {
     await updateUserProfile(uid, {
-      lastPassiveIncome: now
+      lastPassiveIncome: profile.lastPassiveIncome
     });
     return;
   }
 
-  profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + gain;
-  profile.lastPassiveIncome = now;
+  profile.accounts[activeAccount] += gain;
 
   await updateUserProfile(uid, {
     accounts: profile.accounts,
-    lastPassiveIncome: profile.lastPassiveIncome
+    lastPassiveIncome: profile.lastPassiveIncome,
+    history: profile.history
   });
 }
 
 async function initHome(user) {
 
+  bindNewsPopup();
   bindLogout();
   await renderHome(user.uid);
     document.querySelectorAll(".buy-investment-btn").forEach(btn => {
@@ -755,9 +860,9 @@ async function initHome(user) {
   const bonusBtn = byIdOrLegacy("bonusBtn", 'button[onclick="claimDailyBonus()"]');
   const upgradeBtn = byIdOrLegacy("upgradeBtn", 'button[onclick="upgradeClickIncome()"]');
   const boostBtn = byIdOrLegacy("boostBtn", 'button[onclick="buyDoubleMoneyBoost()"]');
-  const loan500Btn = byIdOrLegacy("loan500Btn", 'button[onclick="takeLoan(500)"]');
-  const loan2000Btn = byIdOrLegacy("loan2000Btn", 'button[onclick="takeLoan(2000)"]');
-  const loan10000Btn = byIdOrLegacy("loan10000Btn", 'button[onclick="takeLoan(10000)"]');
+  const loanBtn1 = document.getElementById("loanBtn1");
+  const loanBtn2 = document.getElementById("loanBtn2");
+  const loanBtn3 = document.getElementById("loanBtn3");
   const repayAllBtn = byIdOrLegacy("repayAllBtn", 'button[onclick="repayAllLoans()"]');
   const adminAddMoneyBtn = document.getElementById("adminAddMoneyBtn");
 
@@ -780,23 +885,33 @@ async function initHome(user) {
       const permanentMultiplier = profile.shop?.permanentMultiplier || 1;
       const timeBoostMultiplier = Date.now() < (profile.boost?.doubleMoneyUntil || 0) ? 2 : 1;
       const starterMultiplier = Date.now() < (profile.shop?.starterBoostUntil || 0) ? 2 : 1;
+      const limitedMultiplier =
+        Date.now() < (profile.shop?.limitedMultiplierUntil || 0)
+          ? (profile.shop?.limitedMultiplierValue || 1)
+          : 1;
 
       const leaderboardMultiplier =
         Date.now() < (profile.shop?.leaderboardClickMultiplierUntil || 0) ? 2 : 1;
+      const prestigeMultiplier = getPrestigeMultiplier(profile);
 
       const gain =
         clickValue *
         permanentMultiplier *
         timeBoostMultiplier *
         starterMultiplier *
-        leaderboardMultiplier;
+        leaderboardMultiplier *
+        limitedMultiplier *
+        prestigeMultiplier;
 
       profile.totalClicks = (profile.totalClicks || 0) + 1;
+      addDailyQuestProgress(profile, "clicks", 1);
+      addDailyQuestProgress(profile, "earnMoney", gain);
 
       profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + gain;
       await updateUserProfile(user.uid, {
         accounts: profile.accounts,
-        totalClicks: profile.totalClicks
+        totalClicks: profile.totalClicks,
+        dailyQuests: profile.dailyQuests
       });
       bindInvestmentButtons(user.uid);
       await renderHome(user.uid);
@@ -811,7 +926,7 @@ async function initHome(user) {
       const oneDay = 24 * 60 * 60 * 1000;
 
       if ((now - (profile.lastDailyBonus || 0)) < oneDay) {
-        alert("Cadeau déjà récupéré.");
+        showToast("Cadeau déjà récupéré.");
         return;
       }
 
@@ -860,7 +975,7 @@ async function initHome(user) {
       await renderHome(user.uid);
       bindInvestmentButtons(user.uid);
 
-      alert(`Tu as reçu : ${reward.label}`);
+      showToast(`Tu as reçu : ${reward.label}`);
     };
   }
 
@@ -872,9 +987,9 @@ async function initHome(user) {
       const currentLevel = profile.clickLevel || 1;
       const nextUpgrade = getNextUpgrade(currentLevel);
 
-      if (!nextUpgrade) return alert("Niveau maximal atteint.");
+      if (!nextUpgrade) return showToast("Niveau maximal atteint.");
       if (currentBalance < nextUpgrade.cost) {
-        return alert(`Pas assez d'argent. Il faut ${nextUpgrade.cost} €.`);
+        return showToast(`Pas assez d'argent. Il faut ${nextUpgrade.cost} €.`);
       }
 
       profile.accounts[activeAccount] = currentBalance - nextUpgrade.cost;
@@ -902,15 +1017,15 @@ async function initHome(user) {
       const activeAccount = profile.activeAccount || "Principal";
       const currentBalance = profile.accounts?.[activeAccount] || 0;
       const now = Date.now();
-      const boostPrice = 1000;
+      const boostPrice = getDynamicBoostPrice(profile);
       const durationMs = 60 * 1000;
       const boost = profile.boost || { doubleMoneyUntil: 0 };
 
       if (now < (boost.doubleMoneyUntil || 0)) {
-        return alert("Le boost x2 est déjà actif.");
+        return showToast("Le boost x2 est déjà actif.");
       }
       if (currentBalance < boostPrice) {
-        return alert(`Pas assez d'argent. Il faut ${boostPrice} €.`);
+        return showToast(`Pas assez d'argent. Il faut ${boostPrice} €.`);
       }
 
       profile.accounts[activeAccount] = currentBalance - boostPrice;
@@ -930,9 +1045,15 @@ async function initHome(user) {
     };
   }
 
-  if (loan500Btn) loan500Btn.onclick = async () => await takeLoanFirebase(user.uid, 500);
-  if (loan2000Btn) loan2000Btn.onclick = async () => await takeLoanFirebase(user.uid, 2000);
-  if (loan10000Btn) loan10000Btn.onclick = async () => await takeLoanFirebase(user.uid, 10000);
+  [loanBtn1, loanBtn2, loanBtn3].forEach(btn => {
+    if (!btn) return;
+
+    btn.onclick = async () => {
+      const amount = Number(btn.dataset.loanAmount);
+      if (!amount || amount <= 0) return alert("Montant de crédit invalide.");
+      await takeLoanFirebase(user.uid, amount);
+    };
+  });
   if (repayAllBtn) repayAllBtn.onclick = async () => await repayAllLoansFirebase(user.uid);
 
   if (adminAddMoneyBtn) {
@@ -942,7 +1063,7 @@ async function initHome(user) {
 
       const activeAccount = profile.activeAccount || "Principal";
       const amount = Number(prompt("Montant à ajouter au compte actif ?"));
-      if (!amount || amount <= 0) return alert("Montant invalide.");
+      if (!amount || amount <= 0) return showToast("Montant invalide.");
 
       profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + amount;
       const newHistory = profile.history || [];
@@ -965,7 +1086,7 @@ async function initHome(user) {
       if (!entered) return;
 
       if ((profile.card?.pin || "") !== entered) {
-        return alert("PIN incorrect.");
+        return showToast("PIN incorrect.");
       }
 
       profile.card = profile.card || {};
@@ -982,7 +1103,7 @@ async function initHome(user) {
       const newPin = document.getElementById("newCardPinHome").value.trim();
 
       if (!/^\d{4}$/.test(newPin)) {
-        return alert("Le PIN doit contenir exactement 4 chiffres.");
+        return showToast("Le PIN doit contenir exactement 4 chiffres.");
       }
 
       profile.card = profile.card || {};
@@ -1091,6 +1212,7 @@ async function initHome(user) {
 
     await applyPassiveIncome(user.uid);
     await autoLoanPaymentFirebase(user.uid);
+    await checkAndClaimMissions(user.uid);
     await renderHome(user.uid);
     bindInvestmentButtons(user.uid);
   }, 1000);
@@ -1103,7 +1225,7 @@ async function initHome(user) {
 
     const pin = prompt("Entre ton PIN carte");
     if (pin !== profile.card?.pin) {
-      alert("PIN incorrect");
+      showToast("PIN incorrect");
       return;
     }
 
@@ -1240,12 +1362,12 @@ async function initPayments(user) {
       const beneficiaryIban = document.getElementById("iban")?.value.trim() || "";
       const amount = Number(document.getElementById("amount")?.value);
 
-      if (!beneficiaryName && !beneficiaryIban) return alert("Entre un bénéficiaire ou un IBAN.");
-      if (!amount || amount <= 0) return alert("Entre un montant valide.");
+      if (!beneficiaryName && !beneficiaryIban) return showToast("Entre un bénéficiaire ou un IBAN.");
+      if (!amount || amount <= 0) return showToast("Entre un montant valide.");
 
       const activeAccount = sender.activeAccount || "Principal";
       const senderBalance = sender.accounts?.[activeAccount] || 0;
-      if (senderBalance < amount) return alert("Pas assez d'argent.");
+      if (senderBalance < amount) return showToast("Pas assez d'argent.");
 
       const allUsers = await getAllUsers();
       const target = allUsers.find(u =>
@@ -1253,8 +1375,8 @@ async function initPayments(user) {
         (beneficiaryName && ((u.displayName || "").toLowerCase() === beneficiaryName.toLowerCase() || (u.username || "").toLowerCase() === beneficiaryName.toLowerCase()))
       );
 
-      if (!target) return alert("Aucun compte Rafael Bank trouvé.");
-      if (target.uid === user.uid) return alert("Tu ne peux pas t'envoyer de virement à toi-même.");
+      if (!target) return showToast("Aucun compte Rafael Bank trouvé.");
+      if (target.uid === user.uid) return showToast("Tu ne peux pas t'envoyer de virement à toi-même.");
 
       const receiver = await getUserProfile(target.uid);
       const receiverActiveAccount = receiver.activeAccount || "Principal";
@@ -1292,8 +1414,8 @@ async function initPayments(user) {
       const targetValue = document.getElementById("adminTargetUser")?.value.trim() || "";
       const amount = Number(document.getElementById("adminAmount")?.value);
 
-      if (!targetValue) return alert("Entre un joueur.");
-      if (!amount || amount <= 0) return alert("Entre un montant valide.");
+      if (!targetValue) return showToast("Entre un joueur.");
+      if (!amount || amount <= 0) return showToast("Entre un montant valide.");
 
       const allUsers = await getAllUsers();
       const target = allUsers.find(u =>
@@ -1302,8 +1424,8 @@ async function initPayments(user) {
         (u.iban || "").toLowerCase() === targetValue.toLowerCase()
       );
 
-      if (!target) return alert("Joueur introuvable.");
-      if (target.uid === user.uid) return alert("Impossible d'envoyer à toi-même ici.");
+      if (!target) return showToast("Joueur introuvable.");
+      if (target.uid === user.uid) return showToast("Impossible d'envoyer à toi-même ici.");
 
       const targetProfile = await getUserProfile(target.uid);
       const targetActiveAccount = targetProfile.activeAccount || "Principal";
@@ -1331,7 +1453,7 @@ async function initPayments(user) {
       if (adminAmountInput) adminAmountInput.value = "";
 
       await renderPayments(user.uid);
-      alert("Argent envoyé.");
+      showToast("Argent envoyé.");
     };
   }
 
@@ -1430,7 +1552,7 @@ async function initCards(user) {
       const newCardPin = document.getElementById("newCardPin")?.value.trim() || "";
 
       if (!/^\d{4}$/.test(newCardPin)) {
-        return alert("Le PIN doit contenir exactement 4 chiffres.");
+        return showToast("Le PIN doit contenir exactement 4 chiffres.");
       }
 
       profile.card = profile.card || {};
@@ -1453,7 +1575,7 @@ async function initCards(user) {
       if (!entered) return;
 
       if ((profile.card?.pin || "") !== entered) {
-        return alert("PIN incorrect.");
+        return showToast("PIN incorrect.");
       }
 
       profile.card.revealed = !profile.card.revealed;
@@ -1701,6 +1823,19 @@ async function renderCrypto(uid) {
       : "Mode actuel : manuel";
   }
 
+  const marketNewsTitle = document.getElementById("marketNewsTitle");
+  const marketNewsDescription = document.getElementById("marketNewsDescription");
+
+  const currentNews = await getGlobalNews();
+
+  if (marketNewsTitle) {
+    marketNewsTitle.innerText = currentNews?.title || "Aucune news active";
+  }
+
+  if (marketNewsDescription) {
+    marketNewsDescription.innerText = currentNews?.description || "Le marché est calme pour le moment.";
+  }
+
   if (adminAssetSelect) adminAssetSelect.value = assetKey;
   if (adminAssetPrice) adminAssetPrice.value = Number(asset.price || 0).toFixed(2);
 
@@ -1717,11 +1852,11 @@ async function buyCrypto(uid) {
   if (!input) return;
 
   const amount = Number(input.value);
-  if (!amount || amount <= 0) return alert("Entre un montant valide.");
+  if (!amount || amount <= 0) return showToast("Entre un montant valide.");
 
   const activeAccount = profile.activeAccount || "Principal";
   const balance = profile.accounts?.[activeAccount] || 0;
-  if (balance < amount) return alert("Pas assez d'argent.");
+  if (balance < amount) return showToast("Pas assez d'argent.");
 
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
@@ -1742,10 +1877,13 @@ async function buyCrypto(uid) {
   asset.transactions.unshift(line);
   profile.history.unshift(line);
 
+  addDailyQuestProgress(profile, "cryptoBuy", 1);
+
   await updateUserProfile(uid, {
     accounts: profile.accounts,
     history: profile.history,
-    crypto: profile.crypto
+    crypto: profile.crypto,
+    dailyQuests: profile.dailyQuests
   });
 
   input.value = "";
@@ -1762,13 +1900,13 @@ async function sellPartialCrypto(uid) {
   if (!input) return;
 
   const qty = Number(input.value);
-  if (!qty || qty <= 0) return alert("Quantité invalide.");
+  if (!qty || qty <= 0) return showToast("Quantité invalide.");
 
   const activeAccount = profile.activeAccount || "Principal";
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
   if (!asset) return;
-  if (qty > (asset.owned || 0)) return alert("Pas assez d’unités.");
+  if (qty > (asset.owned || 0)) return showToast("Pas assez d’unités.");
 
   const saleValue = qty * asset.price;
   const costBasis = qty * (asset.avgBuyPrice || 0);
@@ -1807,7 +1945,7 @@ async function sellAllCrypto(uid) {
   const activeAccount = profile.activeAccount || "Principal";
   const assetKey = profile.crypto.currentAsset;
   const asset = profile.crypto.assets[assetKey];
-  if (!asset || (asset.owned || 0) <= 0) return alert("Rien à vendre.");
+  if (!asset || (asset.owned || 0) <= 0) return showToast("Rien à vendre.");
 
   const qty = asset.owned;
   const saleValue = qty * asset.price;
@@ -1870,6 +2008,7 @@ async function tickGlobalCryptoMarket(uid) {
 }
 
 async function initCrypto(user) {
+  bindNewsPopup();
   bindLogout();
   await renderCrypto(user.uid);
   await renderInvestmentsInsideCrypto(user.uid);
@@ -1902,6 +2041,7 @@ async function initCrypto(user) {
       const profile = await getUserProfile(user.uid);
       if (!profile.isAdmin) return;
 
+      market.randomMode = !market.randomMode;
       const market = await ensureGlobalMarket();
       market.randomMode = !market.randomMode;
       await setGlobalMarket(market);
@@ -1930,7 +2070,7 @@ async function initCrypto(user) {
       if (!input) return;
 
       const newPrice = Number(input.value.replace(",", "."));
-      if (!newPrice || newPrice <= 0) return alert("Prix invalide.");
+      if (!newPrice || newPrice <= 0) return showToast("Prix invalide.");
 
       const market = await ensureGlobalMarket();
       const assetKey = profile.crypto?.currentAsset || "BTC";
@@ -1958,6 +2098,11 @@ async function initCrypto(user) {
   setInterval(async () => {
     await applyPassiveIncome(user.uid);
     await tickGlobalCryptoMarket(user.uid);
+    const news = await getGlobalNews();
+    if (!news || Date.now() > (news.expiresAt || 0)) {
+      await triggerRandomNews();
+    }
+
     await renderInvestmentsInsideCrypto(user.uid);
   }, 1000);
 }
@@ -2081,7 +2226,7 @@ async function getStripeHistory(uid) {
 
 window.adminRemoveMoney = async function(uid) {
   const target = await getUserProfile(uid);
-  if (!target) return alert("Utilisateur introuvable.");
+  if (!target) return showToast("Utilisateur introuvable.");
 
   const activeAccount = target.activeAccount || "Principal";
   target.accounts = target.accounts || { Principal: 0 };
@@ -2090,12 +2235,12 @@ window.adminRemoveMoney = async function(uid) {
   const amount = Number(prompt(`Montant à retirer ? Solde actuel : ${currentBalance.toFixed(2)} €`));
 
   if (!amount || amount <= 0) {
-    alert("Montant invalide.");
+    showToast("Montant invalide.");
     return;
   }
 
   if (currentBalance < amount) {
-    alert("Impossible : le joueur n'a pas assez d'argent.");
+    showToast("Impossible : le joueur n'a pas assez d'argent.");
     return;
   }
 
@@ -2108,12 +2253,13 @@ window.adminRemoveMoney = async function(uid) {
     history: target.history
   });
 
-  alert("Argent retiré.");
+  showToast("Argent retiré.");
   location.reload();
 };
 
 
 async function initAdmin(user) {
+  bindNewsPopup();
   bindLogout();
   await renderAdmin(user);
 }
@@ -2239,16 +2385,16 @@ async function startStripeCheckout(uid, priceId, itemId, mode = "payment") {
       mode,
       price: priceId,
       allow_promotion_codes: true,
-
       success_url: baseUrl + "success.html?item=" + itemId + "&session_id={CHECKOUT_SESSION_ID}",
       cancel_url: baseUrl + "boutique.html",
 
       itemId: itemId,
-      createdAt: Date.now(),
-
       client_reference_id: itemId,
+
       metadata: {
-        itemId
+        itemId: itemId,
+        productId: itemId,
+        uid: uid
       }
     }
   );
@@ -2257,7 +2403,7 @@ async function startStripeCheckout(uid, priceId, itemId, mode = "payment") {
     const data = snap.data();
 
     if (data?.error) {
-      alert(data.error.message);
+      showToast(data.error.message);
     }
 
     if (data?.url) {
@@ -2279,28 +2425,6 @@ const SHOP_ITEMS = {
       rewardType: "dailyGift",
       badge: "Journalier",
       visual: "🎁"
-    },
-    {
-      id: "lootbox_fake",
-      title: "Loot Box",
-      subtitle: "Récompense aléatoire",
-      priceLabel: "50 000 € (jeu)",
-      type: "fake",
-      fakePrice: 50000,
-      rewardType: "lootbox",
-      badge: "Chance",
-      visual: "🎰"
-    },
-    {
-      id: "mega_lootbox_fake",
-      title: "Mega Loot Box",
-      subtitle: "Meilleures récompenses",
-      priceLabel: "500 000 € (jeu)",
-      type: "fake",
-      fakePrice: 500000,
-      rewardType: "megaLootbox",
-      badge: "Rare",
-      visual: "💎"
     },
     {
       id: "boost_x2_30s_fake",
@@ -2341,19 +2465,6 @@ const SHOP_ITEMS = {
       visual: "☄️"
     },
     {
-      id: "starter_pack_real",
-      title: "Pack Débutant",
-      subtitle: "1 semaine de boost + 1 000 000 €",
-      priceLabel: "Acheter pour 2,99 €",
-      type: "real",
-      realPrice : "2.99 €",
-      priceId: "price_1TO3SR0fIfhAjnNbdp6BiU9U",
-      rewardType: "starterPack",
-      badge: "Limité",
-      visual: "🎁",
-      limitedToDays: 2
-    },
-    {
       id: "premium_subscription",
       title: "Abonnement Premium",
       subtitle: "-15% boutique + 100 000 € chaque mois",
@@ -2374,6 +2485,19 @@ const SHOP_ITEMS = {
   ],
 
   premium: [
+    {
+      id: "starter_pack_real",
+      title: "Pack Débutant",
+      subtitle: "1 semaine de boost + 1 000 000 €",
+      priceLabel: "2,99 €",
+      type: "real",
+      realPrice: 2.99,
+      priceId: "TON_PRICE_ID_STRIPE",
+      rewardType: "starterPack",
+      badge: "Limité",
+      visual: "🎁",
+      limitedToDays: 2
+    },
     {
       id: "gold_card_fake",
       title: "Carte Gold",
@@ -2423,10 +2547,80 @@ const SHOP_ITEMS = {
       theme: "dark",
       visual: "10X"
     }
-  ],
-};
+  ]
+}
+
+const LIMITED_OFFERS = [
+  {
+    id: "limited_boost_x5_10min",
+    title: "Flash Boost x5",
+    subtitle: "x5 pendant 10 minutes",
+    priceLabel: "250 000 € (jeu)",
+    type: "fake",
+    fakePrice: 250000,
+    rewardType: "limitedTimedMultiplier",
+    rewardValue: 5,
+    rewardDurationMs: 10 * 60 * 1000,
+    badge: "Offre limitée",
+    visual: "🔥",
+    durationMs: 2 * 60 * 60 * 1000
+  },
+  {
+    id: "limited_money_pack",
+    title: "Pack Express",
+    subtitle: "+500 000 € jeu",
+    priceLabel: "100 000 € (jeu)",
+    type: "fake",
+    fakePrice: 100000,
+    rewardType: "limitedMoney",
+    rewardValue: 500000,
+    badge: "Flash",
+    visual: "💸",
+    durationMs: 2 * 60 * 60 * 1000
+  },
+  {
+    id: "limited_crypto_btc",
+    title: "Mini Pack BTC",
+    subtitle: "+1 BTC",
+    priceLabel: "20 000 € (jeu)",
+    type: "fake",
+    fakePrice: 20000,
+    rewardType: "limitedCrypto",
+    asset: "BTC",
+    quantity: 1,
+    badge: "Crypto",
+    visual: "₿",
+    durationMs: 2 * 60 * 60 * 1000
+  }
+];
+
+function getCurrentLimitedOffer() {
+  const cycleMs = 2 * 60 * 60 * 1000;
+  const index = Math.floor(Date.now() / cycleMs) % LIMITED_OFFERS.length;
+  const offer = LIMITED_OFFERS[index];
+
+  const cycleStart = Math.floor(Date.now() / cycleMs) * cycleMs;
+  const endAt = cycleStart + cycleMs;
+
+  return {
+    ...offer,
+    endAt
+  };
+}
+
+function formatRemainingTime(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 function buildShopCard(item, variant = "featured", profile = null) {
+  let limitedTimerHtml = "";
   const ownsItem = (() => {
     if (!profile) return false;
     if (profile.isAdmin) return true;
@@ -2448,6 +2642,25 @@ function buildShopCard(item, variant = "featured", profile = null) {
         return false;
     }
   })();
+
+  if (item.id === "starter_pack_real" && profile?.createdAt) {
+    const endAt = profile.createdAt + 2 * 24 * 60 * 60 * 1000;
+    const remaining = endAt - Date.now();
+
+    if (remaining > 0) {
+      limitedTimerHtml = `
+        <div class="shop-note">
+          ⏳ Disponible encore : ${formatRemainingTime(remaining)}
+        </div>
+      `;
+    } else {
+      limitedTimerHtml = `
+        <div class="shop-note">
+          Offre expirée
+        </div>
+      `;
+    }
+  }
 
   const extraClasses = [
     "shop-card",
@@ -2490,6 +2703,7 @@ function buildShopCard(item, variant = "featured", profile = null) {
         <h3>${escapeHtml(item.title)}</h3>
         ${item.subtitle ? `<div class="shop-subtitle">${escapeHtml(item.subtitle)}</div>` : ""}
         <div class="shop-price">${escapeHtml(item.priceLabel)}</div>
+        ${limitedTimerHtml}
         ${
           item.type === "real"
             ? `<div class="shop-note">Paiement • Avec Stripe</div>`
@@ -2511,8 +2725,17 @@ async function purchaseShopItem(uid, itemId) {
   const profile = await getUserProfile(uid);
   if (!profile) return;
 
-  const allItems = [...SHOP_ITEMS.featured, ...SHOP_ITEMS.money, ...SHOP_ITEMS.premium];
+  const limitedOffer = getCurrentLimitedOffer();
+
+  const allItems = [
+    ...SHOP_ITEMS.featured,
+    ...SHOP_ITEMS.money,
+    ...SHOP_ITEMS.premium,
+    limitedOffer
+  ];
+
   const item = allItems.find(i => i.id === itemId);
+
   if (!item) return;
 
   const activeAccount = profile.activeAccount || "Principal";
@@ -2521,27 +2744,32 @@ async function purchaseShopItem(uid, itemId) {
   profile.history = profile.history || [];
   profile.card = profile.card || { blocked: false, revealed: false, type: "classic" };
   profile.shop = profile.shop || {};
+  profile.shop.claimedLimitedOffers = profile.shop.claimedLimitedOffers || [];
   profile.boost = profile.boost || { doubleMoneyUntil: 0 };
   profile.createdAt = profile.createdAt || Date.now();
 
   if (item.limitedToDays) {
     const visible = (Date.now() - profile.createdAt) < (item.limitedToDays * 24 * 60 * 60 * 1000);
     if (!visible) {
-      alert("Cette offre n'est plus disponible.");
+      showToast("Cette offre n'est plus disponible.");
       return;
     }
   }
 
   if (item.type === "fake") {
     const balance = profile.accounts[activeAccount] || 0;
-    const finalFakePrice = Math.round((item.fakePrice || 0) * (1 - discountPercent / 100));
+    const inflation = getInflationMultiplier(profile);
+    const baseFakePrice = item.fakePrice || 0;
+    const discountPercent = profile.shop?.premiumSubscription ? 15 : 0;
+
+    const finalFakePrice = Math.round(baseFakePrice * inflation * (1 - discountPercent / 100));
+
     if (balance < finalFakePrice) {
-      alert("Pas assez d'argent du jeu.");
+      alert(`Pas assez d'argent du jeu. Prix : ${formatMoney(finalFakePrice)}`);
       return;
     }
+
     profile.accounts[activeAccount] = balance - finalFakePrice;
-  } else {
-    alert(`Paiement simulé réussi pour ${item.priceLabel}. Stripe sera branché ensuite.`);
   }
 
   switch (item.rewardType) {
@@ -2558,7 +2786,7 @@ async function purchaseShopItem(uid, itemId) {
       const oneDay = 24 * 60 * 60 * 1000;
 
       if ((now - (profile.lastDailyBonus || 0)) < oneDay) {
-        alert("Cadeau déjà récupéré.");
+        showToast("Cadeau déjà récupéré.");
         return;
       }
 
@@ -2591,6 +2819,7 @@ async function purchaseShopItem(uid, itemId) {
 
       profile.lastDailyBonus = now;
       profile.history.unshift(`Cadeau du jour : ${reward.label}`);
+      showToast(`🎁 Cadeau du jour récupéré : ${reward.label}`);
       break;
     }
 
@@ -2654,14 +2883,59 @@ async function purchaseShopItem(uid, itemId) {
     case "lootbox": {
       const reward = drawLootboxReward(false);
       await applyLootboxReward(profile, reward);
-      alert(`Loot Box : ${reward.label}`);
+      showToast(`Loot Box : ${reward.label}`);
       break;
     }
 
     case "megaLootbox": {
       const reward = drawLootboxReward(true);
       await applyLootboxReward(profile, reward);
-      alert(`Mega Loot Box : ${reward.label}`);
+      showToast(`Mega Loot Box : ${reward.label}`);
+      break;
+    }
+
+    case "limitedTimedMultiplier": {
+      profile.shop.limitedMultiplierValue = item.rewardValue;
+      profile.shop.limitedMultiplierUntil = Date.now() + item.rewardDurationMs;
+
+      const limitedOfferKey = `${item.id}_${item.endAt}`;
+      profile.shop.claimedLimitedOffers.push(limitedOfferKey);
+
+      profile.history.unshift(`Offre limitée : ${item.title}`);
+      break;
+    }
+
+    case "limitedMoney": {
+      profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + item.rewardValue;
+
+      const limitedOfferKey = `${item.id}_${item.endAt}`;
+      profile.shop.claimedLimitedOffers.push(limitedOfferKey);
+
+      profile.history.unshift(`Offre limitée : ${item.title} +${formatMoney(item.rewardValue)}`);
+      break;
+    }
+
+    case "limitedCrypto": {
+      profile.crypto = profile.crypto || { currentAsset: "BTC", assets: {} };
+
+      if (!profile.crypto.assets[item.asset]) {
+        profile.crypto.assets[item.asset] = {
+          price: 0,
+          owned: 0,
+          avgBuyPrice: 0,
+          history: [],
+          transactions: []
+        };
+      }
+
+      profile.crypto.assets[item.asset].owned =
+        (profile.crypto.assets[item.asset].owned || 0) + item.quantity;
+
+      const limitedOfferKey = `${item.id}_${item.endAt}`;
+      profile.shop.claimedLimitedOffers.push(limitedOfferKey);
+
+
+      profile.history.unshift(`Offre limitée : ${item.title}`);
       break;
     }
   }
@@ -2676,7 +2950,7 @@ async function purchaseShopItem(uid, itemId) {
     lastDailyBonus: profile.lastDailyBonus
   });
 
-  alert("Achat réussi.");
+  showToast("Achat réussi.");
   await renderShop(uid);
 }
 
@@ -2692,6 +2966,9 @@ async function renderShop(uid) {
   const featuredShop = document.getElementById("featuredShop");
   const moneyPacksGrid = document.getElementById("moneyPacksGrid");
   const premiumPacksGrid = document.getElementById("premiumPacksGrid");
+  const limitedOfferBox = document.getElementById("limitedOfferBox");
+  const limitedOfferTimer = document.getElementById("limitedOfferTimer");
+  const lootboxGrid = document.getElementById("lootboxGrid");
 
   const now = Date.now();
   const createdAt = profile.createdAt || now;
@@ -2713,17 +2990,65 @@ async function renderShop(uid) {
     premiumPacksGrid.innerHTML = SHOP_ITEMS.premium.map(item => buildShopCard(item, "premium", profile)).join("");
   }
 
-  document.querySelectorAll(".buy-shop-item-btn").forEach(btn => {
+  const limitedOffer = getCurrentLimitedOffer();
+  const limitedOfferKey = `${limitedOffer.id}_${limitedOffer.endAt}`;
+  const claimedLimitedOffers = profile.shop?.claimedLimitedOffers || [];
+  const alreadyClaimedLimitedOffer = claimedLimitedOffers.includes(limitedOfferKey);
+
+  if (limitedOfferTimer) {
+    if (alreadyClaimedLimitedOffer) {
+      limitedOfferTimer.innerText = `Offre limitée déjà achetée`;
+    } else {
+      limitedOfferTimer.innerText = `Expire dans ${formatRemainingTime(limitedOffer.endAt - Date.now())}`;
+    }
+  }
+
+  if (limitedOfferBox) {
+    if (alreadyClaimedLimitedOffer) {
+      limitedOfferBox.innerHTML = `
+        <div class="card">
+          <h3>✅ Offre limitée récupérée</h3>
+          <p class="small">Tu as déjà acheté cette offre.</p>
+          <p class="small">Prochaine offre dans ${formatRemainingTime(limitedOffer.endAt - Date.now())}</p>
+        </div>
+      `;
+    } else {
+      limitedOfferBox.innerHTML = buildShopCard(limitedOffer, "featured", profile);
+    }
+  }
+
+  if (lootboxGrid) {
+    lootboxGrid.innerHTML = LOOTBOX_SHOP_ITEMS.map(item => `
+      <div class="shop-card lootbox-card">
+        <div>
+          <div class="shop-badge">${escapeHtml(item.badge)}</div>
+          <h3>${escapeHtml(item.title)}</h3>
+          <div class="shop-subtitle">${escapeHtml(item.subtitle)}</div>
+          <div class="shop-price">${escapeHtml(item.priceLabel)}</div>
+          <div class="shop-note">${item.type === "real" ? "Paiement Stripe" : "Achat avec argent du jeu"}</div>
+        </div>
+
+        <div>
+          <div class="shop-visual">${escapeHtml(item.visual)}</div>
+          <div class="lootbox-card-actions">
+            <button class="buy-lootbox-btn" data-item-id="${escapeHtml(item.id)}">Ouvrir</button>
+            <button class="secondary lootbox-info-btn" data-item-id="${escapeHtml(item.id)}">?</button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  document.querySelectorAll(".lootbox-info-btn").forEach(btn => {
+    btn.onclick = () => {
+      const item = LOOTBOX_SHOP_ITEMS.find(i => i.id === btn.dataset.itemId);
+      if (item) openLootboxInfo(item);
+    };
+  });
+
+  document.querySelectorAll(".buy-lootbox-btn").forEach(btn => {
     btn.onclick = async () => {
-      const itemId = btn.dataset.itemId;
-
-      const allItems = [
-        ...SHOP_ITEMS.featured,
-        ...SHOP_ITEMS.money,
-        ...SHOP_ITEMS.premium
-      ];
-
-      const item = allItems.find(i => i.id === itemId);
+      const item = LOOTBOX_SHOP_ITEMS.find(i => i.id === btn.dataset.itemId);
       if (!item) return;
 
       if (item.type === "real") {
@@ -2731,24 +3056,78 @@ async function renderShop(uid) {
         return;
       }
 
+      const profile = await getUserProfile(uid);
+      const activeAccount = profile.activeAccount || "Principal";
+      const balance = profile.accounts?.[activeAccount] || 0;
+
+      if (balance < item.fakePrice) {
+        showToast("Pas assez d'argent du jeu.");
+        return;
+      }
+
+      profile.accounts[activeAccount] = balance - item.fakePrice;
+      profile.history = profile.history || [];
+      profile.history.unshift(`Achat lootbox : ${item.title} -${formatMoney(item.fakePrice)}`);
+
+      await updateUserProfile(uid, {
+        accounts: profile.accounts,
+        history: profile.history
+      });
+
+      await openLootboxWithAnimation(uid, item);
+    };
+  });
+
+  document.querySelectorAll(".buy-shop-item-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const itemId = btn.dataset.itemId;
+
+      const limitedOffer = getCurrentLimitedOffer();
+
+      const allItems = [
+        ...SHOP_ITEMS.featured,
+        ...SHOP_ITEMS.money,
+        ...SHOP_ITEMS.premium,
+        limitedOffer
+      ];
+
+      const item = allItems.find(i => i.id === itemId);
+
+      if (!item) {
+        alert("Produit introuvable.");
+        return;
+      }
+
+      if (item.type === "real") {
+        if (!item.priceId) {
+          alert("Erreur : priceId Stripe manquant.");
+          return;
+        }
+
+        await startStripeCheckout(uid, item.priceId, item.id, "payment");
+        return;
+      }
+
       if (item.type === "subscription") {
+        if (!item.priceId) {
+          alert("Erreur : priceId Stripe manquant.");
+          return;
+        }
+
         await startStripeCheckout(uid, item.priceId, item.id, "subscription");
         return;
       }
 
-      await purchaseShopItem(uid, itemId);
+      await purchaseShopItem(uid, item.id);
     };
   });
 }
 
 async function initShop(user) {
+  bindNewsPopup();
   bindLogout();
   await renderShop(user.uid);
-  if (item.type === "real") {
-    await startStripeCheckout(user.uid, item.priceId);
-  } else {
-    await purchaseShopItem(user.uid, itemId);
-  }
+  bindLootboxModals();
 }
 
 /* ================= LEADERBOARD ================= */
@@ -2783,6 +3162,7 @@ function getLeaderboardValue(user, type) {
   if (type === "clicks") return Number(user.totalClicks || 0);
   if (type === "passive") return getTotalPassiveIncome(user);
   if (type === "crypto") return getCryptoValue(user);
+  if (type === "prestige") return Number(user.prestige?.level || 0);
   return 0;
 }
 
@@ -2791,6 +3171,7 @@ function getLeaderboardTitle(type) {
   if (type === "clicks") return "Top clicks";
   if (type === "passive") return "Top revenus passifs";
   if (type === "crypto") return "Top portefeuille crypto";
+  if (type === "prestige") return "Top prestige";
   return "Classement";
 }
 
@@ -2801,6 +3182,10 @@ function formatLeaderboardValue(value, type) {
 
   if (type === "passive") {
     return formatMoney(value) + " / sec";
+  }
+
+  if (type === "prestige") {
+    return `Prestige ${Number(value || 0).toLocaleString("fr-FR")}`;
   }
 
   return formatMoney(value);
@@ -2821,11 +3206,19 @@ async function renderLeaderboard(uid) {
     .filter(u => !u.isAdmin)
     .map(u => ({
       uid: u.uid,
+      rawUser: u,
       name: u.displayName || u.username || u.email || "Joueur",
       isCurrentUser: u.uid === uid,
       value: getLeaderboardValue(u, currentLeaderboardType)
     }))
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => {
+      if (currentLeaderboardType === "prestige") {
+        if (b.value !== a.value) return b.value - a.value;
+        return getUserNetWorth(b.rawUser) - getUserNetWorth(a.rawUser);
+      }
+
+      return b.value - a.value;
+    })
     .slice(0, 20);
 
   if (leaderboardTitle) {
@@ -2899,6 +3292,7 @@ async function rewardLeaderboardTop(uid, ranking) {
 }
 
 async function initLeaderboard(user) {
+  bindNewsPopup();
   bindLogout();
 
   document.querySelectorAll(".leaderboard-tab").forEach(btn => {
@@ -2987,7 +3381,179 @@ async function applyLootboxReward(profile, reward) {
     profile.shop.permanentMultiplier = Math.max(profile.shop.permanentMultiplier || 1, reward.value);
   }
 
+  if (reward.type === "card") {
+    profile.card = profile.card || {};
+    profile.shop = profile.shop || {};
+
+    if (reward.cardType === "black") {
+      profile.shop.ownsBlackCard = true;
+      profile.card.type = "black";
+    }
+
+    if (reward.cardType === "premium") {
+      profile.shop.ownsGoldCard = true;
+      profile.card.type = "premium";
+    }
+  }
+
+  if (reward.type === "visualPack") {
+    profile.shop = profile.shop || {};
+    profile.card = profile.card || {};
+
+    profile.shop.visualPack = true;
+    profile.shop.ownsGoldCard = true;
+    profile.shop.ownsBlackCard = true;
+    profile.card.type = "black";
+  }
+
   profile.history.unshift(`Loot box : ${reward.label}`);
+}
+
+const LOOTBOX_SHOP_ITEMS = [
+  {
+    id: "lootbox_fake",
+    title: "Loot Box",
+    subtitle: "Récompense aléatoire classique",
+    priceLabel: "50 000 € (jeu)",
+    type: "fake",
+    fakePrice: 50000,
+    rewardType: "lootbox",
+    badge: "Chance",
+    visual: "🎁",
+    table: "normal"
+  },
+  {
+    id: "mega_lootbox_fake",
+    title: "Mega Loot Box",
+    subtitle: "Meilleures récompenses",
+    priceLabel: "500 000 € (jeu)",
+    type: "fake",
+    fakePrice: 500000,
+    rewardType: "megaLootbox",
+    badge: "Rare",
+    visual: "💎",
+    table: "mega"
+  },
+  {
+    id: "premium_lootbox_real",
+    title: "Premium Loot Box",
+    subtitle: "Récompenses très rares",
+    priceLabel: "2,99 €",
+    type: "real",
+    priceId: "price_1TR0C70fIfhAjnNbKVBrvcXh",
+    rewardType: "premiumLootbox",
+    badge: "Premium",
+    visual: "👑",
+    table: "premium"
+  }
+];
+
+const PREMIUM_LOOTBOX_REWARDS = [
+  { chance: 30, type: "money", value: 1000000, label: "1 000 000 €" },
+  { chance: 25, type: "boost", durationMs: 15 * 60 * 1000, label: "Boost x2 pendant 15 min" },
+  { chance: 20, type: "crypto", asset: "BTC", quantity: 50, label: "50 BTC" },
+  { chance: 15, type: "permanentMultiplier", value: 2, label: "x2 à vie" },
+  { chance: 8, type: "card", cardType: "black", label: "Carte Black" },
+  { chance: 2, type: "visualPack", label: "Pack Premium Visuel" }
+];
+
+function getLootboxTable(table) {
+  if (table === "mega") return MEGA_LOOTBOX_REWARDS;
+  if (table === "premium") return PREMIUM_LOOTBOX_REWARDS;
+  return LOOTBOX_REWARDS;
+}
+
+function drawLootboxRewardByTable(table) {
+  const rewards = getLootboxTable(table);
+  const rand = Math.random() * 100;
+  let cumulative = 0;
+
+  for (const reward of rewards) {
+    cumulative += reward.chance;
+    if (rand <= cumulative) return reward;
+  }
+
+  return rewards[0];
+}
+
+async function openLootboxWithAnimation(uid, item) {
+  const modal = document.getElementById("lootboxModal");
+  const animation = document.getElementById("lootboxAnimation");
+  const title = document.getElementById("lootboxResultTitle");
+  const text = document.getElementById("lootboxResultText");
+
+  if (!modal || !animation || !title || !text) {
+    await purchaseShopItem(uid, item.id);
+    return;
+  }
+
+  modal.style.display = "flex";
+  animation.className = "lootbox-animation";
+  animation.innerText = item.visual || "🎁";
+  title.innerText = "Ouverture...";
+  text.innerText = "La récompense arrive...";
+
+  setTimeout(async () => {
+    const profile = await getUserProfile(uid);
+    if (!profile) return;
+
+    const reward = drawLootboxRewardByTable(item.table);
+
+    await applyLootboxReward(profile, reward);
+
+    await updateUserProfile(uid, {
+      accounts: profile.accounts,
+      history: profile.history,
+      boost: profile.boost,
+      shop: profile.shop,
+      crypto: profile.crypto,
+      card: profile.card
+    });
+
+    animation.classList.add("opened");
+    animation.innerText = "✨";
+    title.innerText = "Récompense obtenue !";
+    text.innerText = reward.label;
+    showToast(`🎁 Lootbox : ${reward.label}`);
+
+    await renderShop(uid);
+  }, 1600);
+}
+
+function openLootboxInfo(item) {
+  const modal = document.getElementById("lootboxInfoModal");
+  const content = document.getElementById("lootboxInfoContent");
+  if (!modal || !content) return;
+
+  const rewards = getLootboxTable(item.table);
+
+  content.innerHTML = rewards.map(reward => `
+    <div class="lootbox-info-row">
+      <span>${escapeHtml(reward.label)}</span>
+      <strong>${reward.chance}%</strong>
+    </div>
+  `).join("");
+
+  modal.style.display = "flex";
+}
+
+function bindLootboxModals() {
+  const closeLootboxModalBtn = document.getElementById("closeLootboxModalBtn");
+  const closeLootboxInfoBtn = document.getElementById("closeLootboxInfoBtn");
+  const lootboxModal = document.getElementById("lootboxModal");
+  const lootboxInfoModal = document.getElementById("lootboxInfoModal");
+
+  if (closeLootboxModalBtn) {
+    closeLootboxModalBtn.onclick = () => {
+      if (lootboxModal) lootboxModal.style.display = "none";
+    };
+  }
+
+  if (closeLootboxInfoBtn) {
+    closeLootboxInfoBtn.onclick = () => {
+      if (lootboxInfoModal) lootboxInfoModal.style.display = "none";
+    };
+  }
 }
 
 /* ================= INVESTMENTS PAGE ================= */
@@ -3015,7 +3581,8 @@ async function renderInvestmentsPage(uid) {
   if (grid) {
     grid.innerHTML = INVESTMENTS.map(inv => {
       const qty = profile.investments[inv.id] || 0;
-      const canBuy = balance >= inv.cost;
+      const finalCost = Math.round(inv.cost * getInflationMultiplier(profile));
+      const canBuy = balance >= finalCost;
 
       return `
         <div class="investment-card">
@@ -3028,7 +3595,7 @@ async function renderInvestmentsPage(uid) {
 
             <div class="investment-stats">
               <div class="investment-stat">
-                Prix : <strong>${formatMoney(inv.cost)}</strong>
+                Prix : <strong>${formatMoney(finalCost)}</strong>
               </div>
               <div class="investment-stat">
                 Gain : <strong>${formatMoney(inv.incomePerSecond)} / sec</strong>
@@ -3065,6 +3632,616 @@ async function initInvestments(user) {
   }, 1000);
 }
 
+/* ============= Mission ============== */
+
+const MISSIONS = [
+  {
+    id: "click_100",
+    title: "Cliqueur débutant",
+    description: "Atteindre 100 clics",
+    reward: 5000,
+    check: profile => (profile.totalClicks || 0) >= 100
+  },
+  {
+    id: "click_1000",
+    title: "Cliqueur confirmé",
+    description: "Atteindre 1 000 clics",
+    reward: 50000,
+    check: profile => (profile.totalClicks || 0) >= 1000
+  },
+  {
+    id: "first_crypto",
+    title: "Premier investisseur",
+    description: "Acheter ta première crypto/action",
+    reward: 10000,
+    check: profile => Object.values(profile.crypto?.assets || {}).some(a => (a.owned || 0) > 0)
+  },
+  {
+    id: "passive_1000",
+    title: "Revenus automatiques",
+    description: "Atteindre 1 000 €/sec de revenus passifs",
+    reward: 100000,
+    check: profile => getTotalPassiveIncome(profile) >= 1000
+  },
+  {
+    id: "millionaire",
+    title: "Millionnaire",
+    description: "Atteindre 1 000 000 € de richesse totale",
+    reward: 250000,
+    check: profile => getUserNetWorth(profile) >= 1000000
+  },
+  {
+    id: "milliardaire",
+    title: "Millairdaire",
+    description: "Atteindre 1 000 000 000 € de richesse totale",
+    reward: 1000000,
+    check: profile => getUserNetWorth(profile) >= 1000000
+  },
+  {
+    id: "first_prestige",
+    title: "Nouvelle vie",
+    description: "Faire ton premier prestige",
+    reward: 500000,
+    check: profile => (profile.prestige?.level || 0) >= 1
+  },
+  {
+    id: "prestige_5",
+    title: "Légende financière",
+    description: "Atteindre le prestige niveau 5",
+    reward: 5000000,
+    check: profile => (profile.prestige?.level || 0) >= 5
+  }
+];
+
+async function checkAndClaimMissions(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  profile.completedMissions = profile.completedMissions || [];
+  profile.accounts = profile.accounts || { Principal: 0 };
+  profile.history = profile.history || [];
+
+  const activeAccount = profile.activeAccount || "Principal";
+  let changed = false;
+
+  for (const mission of MISSIONS) {
+    if (profile.completedMissions.includes(mission.id)) continue;
+
+    if (mission.check(profile)) {
+      profile.completedMissions.push(mission.id);
+      profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + mission.reward;
+      profile.history.unshift(`Mission réussie : ${mission.title} +${formatMoney(mission.reward)}`);
+
+      showToast(`🏆 Succès terminé : ${mission.title} +${formatMoney(mission.reward)}`);
+
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await updateUserProfile(uid, {
+      completedMissions: profile.completedMissions,
+      accounts: profile.accounts,
+      history: profile.history
+    });
+  }
+}
+
+async function renderMissions(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  updateAdminNavVisibility(profile);
+  await checkAndClaimMissions(uid);
+  await renderDailyQuests(uid);
+
+  const freshProfile = await getUserProfile(uid);
+  const prestigeInfo = document.getElementById("prestigeInfo");
+  const prestigeRequirement = document.getElementById("prestigeRequirement");
+  const prestigeBtn = document.getElementById("prestigeBtn");
+
+  const prestigeLevel = freshProfile.prestige?.level || 0;
+  const requirement = getPrestigeRequirement(prestigeLevel);
+  const netWorth = getUserNetWorth(freshProfile);
+
+  if (prestigeInfo) {
+    prestigeInfo.innerText = `Prestige niveau ${prestigeLevel} • Bonus permanent x${getPrestigeMultiplier(freshProfile).toFixed(1)}`;
+  }
+
+  if (prestigeRequirement) {
+    prestigeRequirement.innerText = `Richesse requise : ${formatMoney(requirement)} • Actuel : ${formatMoney(netWorth)}`;
+  }
+
+  if (prestigeBtn) {
+    prestigeBtn.disabled = netWorth < requirement;
+    prestigeBtn.onclick = async () => {
+      await doPrestige(uid);
+    };
+  }
+  const missionsList = document.getElementById("missionsList");
+  if (!missionsList) return;
+
+  const completed = freshProfile.completedMissions || [];
+
+  missionsList.innerHTML = MISSIONS.map(mission => {
+    const isDone = completed.includes(mission.id);
+
+    return `
+      <div class="mission-card ${isDone ? "completed" : ""}">
+        <h3>${escapeHtml(mission.title)}</h3>
+        <p class="small">${escapeHtml(mission.description)}</p>
+        <p>Récompense : <strong>${formatMoney(mission.reward)}</strong></p>
+        <span class="mission-status">${isDone ? "✅ Terminé" : "⏳ En cours"}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+async function initMissions(user) {
+  bindNewsPopup();
+  bindLogout();
+  await renderMissions(user.uid);
+
+  setInterval(async () => {
+    await renderMissions(user.uid);
+  }, 5000);
+}
+
+
+const DAILY_QUESTS = [
+  {
+    id: "earn_10k",
+    title: "Gagner 10 000 €",
+    description: "Gagne 10 000 € aujourd’hui.",
+    reward: 1000,
+    target: 10000,
+    type: "earnMoney"
+  },
+  {
+    id: "click_100_daily",
+    title: "Cliquer 100 fois",
+    description: "Clique 100 fois aujourd’hui.",
+    reward: 5000,
+    target: 100,
+    type: "clicks"
+  },
+  {
+    id: "buy_crypto_daily",
+    title: "Investir en crypto",
+    description: "Achète une crypto ou une action aujourd’hui.",
+    reward: 10000,
+    target: 1,
+    type: "cryptoBuy"
+  },
+  {
+    id: "buy_investment_daily",
+    title: "Acheter un investissement",
+    description: "Achète un investissement passif aujourd’hui.",
+    reward: 15000,
+    target: 1,
+    type: "investmentBuy"
+  }
+];
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ensureDailyQuests(profile) {
+  const today = getTodayKey();
+
+  profile.dailyQuests = profile.dailyQuests || {};
+
+  if (profile.dailyQuests.date !== today) {
+    profile.dailyQuests = {
+      date: today,
+      progress: {},
+      claimed: []
+    };
+  }
+
+  return profile.dailyQuests;
+}
+
+function addDailyQuestProgress(profile, type, amount = 1) {
+  const daily = ensureDailyQuests(profile);
+  daily.progress[type] = (daily.progress[type] || 0) + amount;
+}
+
+async function renderDailyQuests(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  const daily = ensureDailyQuests(profile);
+  const dailyQuestsList = document.getElementById("dailyQuestsList");
+  if (!dailyQuestsList) return;
+
+  dailyQuestsList.innerHTML = DAILY_QUESTS.map(quest => {
+    const progress = daily.progress[quest.type] || 0;
+    const percent = Math.min(100, (progress / quest.target) * 100);
+    const completed = progress >= quest.target;
+    const claimed = daily.claimed.includes(quest.id);
+
+    return `
+      <div class="mission-card ${completed ? "completed" : ""}">
+        <h3>${escapeHtml(quest.title)}</h3>
+        <p class="small">${escapeHtml(quest.description)}</p>
+        <p>Progression : <strong>${Math.floor(progress)} / ${quest.target}</strong></p>
+        <div style="height:10px; border-radius:999px; background:rgba(255,255,255,0.1); overflow:hidden;">
+          <div style="height:100%; width:${percent}%; background:linear-gradient(90deg,#43e97b,#38f9d7);"></div>
+        </div>
+        <p>Récompense : <strong>${formatMoney(quest.reward)}</strong></p>
+        <button class="claim-daily-quest-btn" data-quest-id="${quest.id}" ${completed && !claimed ? "" : "disabled"}>
+          ${claimed ? "Réclamé" : completed ? "Récupérer" : "En cours"}
+        </button>
+      </div>
+    `;
+  }).join("");
+
+  document.querySelectorAll(".claim-daily-quest-btn").forEach(btn => {
+    btn.onclick = async () => {
+      await claimDailyQuest(uid, btn.dataset.questId);
+      await renderDailyQuests(uid);
+    };
+  });
+
+  await updateUserProfile(uid, {
+    dailyQuests: profile.dailyQuests
+  });
+}
+
+async function claimDailyQuest(uid, questId) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  const daily = ensureDailyQuests(profile);
+  const quest = DAILY_QUESTS.find(q => q.id === questId);
+  if (!quest) return;
+
+  const progress = daily.progress[quest.type] || 0;
+  if (progress < quest.target) {
+    showToast("Quête pas encore terminée.");
+    return;
+  }
+
+  if (daily.claimed.includes(quest.id)) {
+    showToast("Récompense déjà récupérée.");
+    return;
+  }
+
+  const activeAccount = profile.activeAccount || "Principal";
+  profile.accounts = profile.accounts || { Principal: 0 };
+  profile.history = profile.history || [];
+
+  profile.accounts[activeAccount] = (profile.accounts[activeAccount] || 0) + quest.reward;
+  daily.claimed.push(quest.id);
+
+  profile.history.unshift(`Quête quotidienne terminée : ${quest.title} +${formatMoney(quest.reward)}`);
+
+  await updateUserProfile(uid, {
+    accounts: profile.accounts,
+    dailyQuests: profile.dailyQuests,
+    history: profile.history
+  });
+
+  showToast(`✅ Quête terminée : ${quest.title} +${formatMoney(quest.reward)}`);
+}
+
+
+function getPrestigeRequirement(level) {
+  return 100_000_000 * Math.pow(5, level || 0);
+}
+
+function getPrestigeMultiplier(profile) {
+  const level = profile.prestige?.level || 0;
+  return 1 + level * 0.2;
+}
+
+async function doPrestige(uid) {
+  const profile = await getUserProfile(uid);
+  if (!profile) return;
+
+  const netWorth = getUserNetWorth(profile);
+  const currentLevel = profile.prestige?.level || 0;
+  const requirement = getPrestigeRequirement(currentLevel);
+
+  if (netWorth < requirement) {
+    showToast(`Il faut ${formatMoney(requirement)} de richesse pour faire un prestige.`);
+    return;
+  }
+
+  const confirmPrestige = confirm(
+    `Faire un prestige ? Tu vas repartir presque à zéro, mais gagner +20% de gains permanents.`
+  );
+
+  if (!confirmPrestige) return;
+
+  profile.prestige = profile.prestige || {};
+  profile.prestige.level = currentLevel + 1;
+  profile.prestige.lastPrestigeAt = Date.now();
+
+  profile.accounts = { Principal: 0 };
+  profile.activeAccount = "Principal";
+  profile.clickValue = 1;
+  profile.clickLevel = 1;
+  profile.totalClicks = 0;
+  profile.investments = {};
+  profile.crypto = {
+    currentAsset: "BTC",
+    assets: {}
+  };
+  profile.loans = [];
+  profile.boost = { doubleMoneyUntil: 0 };
+  profile.history = profile.history || [];
+  const prestigeMissionIdsToKeep = ["first_prestige", "prestige_5"];
+
+  profile.completedMissions = (profile.completedMissions || []).filter(id =>
+    prestigeMissionIdsToKeep.includes(id)
+  );
+
+  profile.dailyQuests = {
+    date: getTodayKey(),
+    progress: {},
+    claimed: []
+  };
+  profile.history.unshift(`Prestige niveau ${profile.prestige.level} atteint`);
+
+  await addNewsHistoryItem({
+    title: "⭐ Nouveau prestige",
+    description: `${profile.displayName || profile.username || "Un joueur"} vient d’atteindre le prestige niveau ${profile.prestige.level}.`,
+    type: "prestige"
+  });
+
+  showToast("🔔 Nouvelle news disponible : prestige atteint !");
+
+  await updateUserProfile(uid, {
+    prestige: profile.prestige,
+    accounts: profile.accounts,
+    activeAccount: profile.activeAccount,
+    clickValue: profile.clickValue,
+    clickLevel: profile.clickLevel,
+    investments: profile.investments,
+    crypto: profile.crypto,
+    loans: profile.loans,
+    boost: profile.boost,
+    history: profile.history,
+    completedMissions: profile.completedMissions,
+    dailyQuests: profile.dailyQuests,
+    totalClicks: profile.totalClicks,
+  });
+
+  showToast(`Prestige réussi ! Niveau ${profile.prestige.level}`);
+  await renderMissions(uid);
+}
+
+/* ================== NEWS =========*/
+
+const NEWS_EVENTS = [
+  {
+    id: "apple_bad_sales",
+    title: "Apple annonce des ventes décevantes",
+    description: "Les investisseurs perdent confiance, l'action AAPL chute fortement.",
+    effects: [
+      { type: "asset", asset: "AAPL", percent: -18 }
+    ]
+  },
+  {
+    id: "apple_ai_hype",
+    title: "Apple annonce une IA révolutionnaire",
+    description: "Le marché réagit très positivement à l'annonce.",
+    effects: [
+      { type: "asset", asset: "AAPL", percent: 22 }
+    ]
+  },
+  {
+    id: "tesla_recall",
+    title: "Tesla rappelle plusieurs modèles",
+    description: "TSLA subit une forte pression sur le marché.",
+    effects: [
+      { type: "asset", asset: "TSLA", percent: -15 }
+    ]
+  },
+  {
+    id: "bitcoin_bullrun",
+    title: "Le Bitcoin repart en bull run",
+    description: "Le marché crypto s'emballe.",
+    effects: [
+      { type: "asset", asset: "BTC", percent: 25 },
+      { type: "asset", asset: "ETH", percent: 12 }
+    ]
+  },
+  {
+    id: "market_crash",
+    title: "Panique générale sur les marchés",
+    description: "Toutes les actions et cryptos chutent brutalement.",
+    effects: [
+      { type: "allAssets", percent: -12 }
+    ]
+  },
+  {
+    id: "startup_boom",
+    title: "Boom économique pour les entreprises",
+    description: "Les investissements passifs rapportent temporairement plus.",
+    effects: [
+      { type: "passiveBoost", value: 2, durationMs: 10 * 60 * 1000 }
+    ]
+  }
+];
+
+async function getGlobalNews() {
+  const snap = await getDoc(doc(db, "game", "news"));
+  return snap.exists() ? snap.data() : null;
+}
+
+async function setGlobalNews(news) {
+  await setDoc(doc(db, "game", "news"), news);
+}
+
+async function triggerRandomNews() {
+  const market = await ensureGlobalMarket();
+  if (!market) return;
+
+  const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
+
+  if (news.effects) {
+    news.effects.forEach(effect => {
+      if (effect.type === "asset") {
+        const asset = market.assets?.[effect.asset];
+        if (!asset) return;
+
+        asset.price = Math.max(0.01, asset.price * (1 + effect.percent / 100));
+        asset.history = asset.history || [];
+        asset.history.push(asset.price);
+        if (asset.history.length > 30) asset.history.shift();
+      }
+
+      if (effect.type === "allAssets") {
+        Object.values(market.assets || {}).forEach(asset => {
+          asset.price = Math.max(0.01, asset.price * (1 + effect.percent / 100));
+          asset.history = asset.history || [];
+          asset.history.push(asset.price);
+          if (asset.history.length > 30) asset.history.shift();
+        });
+      }
+    });
+  }
+
+  const globalNews = {
+    ...news,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 10 * 60 * 1000
+  };
+
+  await setGlobalMarket({
+    ...market,
+    updatedAt: Date.now()
+  });
+
+  await addNewsHistoryItem({
+    title: globalNews.title,
+    description: globalNews.description,
+    type: "market"
+  });
+  await setGlobalNews(globalNews);
+}
+
+
+function showToast(message) {
+  const oldToast = document.querySelector(".toast");
+  if (oldToast) oldToast.remove();
+
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerText = message;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 4000);
+}
+
+async function openNewsPopup() {
+  const popup = document.getElementById("newsPopup");
+  const content = document.getElementById("newsPopupContent");
+  if (!popup || !content) return;
+
+  popup.style.display = "flex";
+  content.innerHTML = "Chargement...";
+
+  const currentNews = await getGlobalNews();
+  const history = await getNewsHistory();
+
+  let html = "";
+
+  if (currentNews) {
+    html += `
+      <div class="news-item">
+        <h4>🔥 News active</h4>
+        <h3>${escapeHtml(currentNews.title)}</h3>
+        <p>${escapeHtml(currentNews.description)}</p>
+        <p class="small">Expire : ${formatDateTime(currentNews.expiresAt)}</p>
+      </div>
+    `;
+  }
+
+  html += `<h3 style="margin-top:18px;">Historique des news</h3>`;
+
+  if (!history.length) {
+    html += `
+      <div class="news-item">
+        <h4>Aucune news récente</h4>
+        <p class="small">Les dernières informations apparaîtront ici.</p>
+      </div>
+    `;
+  } else {
+    html += history.map(item => `
+      <div class="news-item">
+        <h4>${getNewsIcon(item.type)} ${escapeHtml(item.title)}</h4>
+        <p>${escapeHtml(item.description)}</p>
+        <p class="small">${formatDateTime(item.createdAt)}</p>
+      </div>
+    `).join("");
+  }
+
+  content.innerHTML = html;
+}
+function getNewsIcon(type) {
+  if (type === "market") return "📈";
+  if (type === "prestige") return "⭐";
+  if (type === "leaderboard") return "🏆";
+  if (type === "success") return "🎯";
+  return "📰";
+}
+
+function bindNewsPopup() {
+  const newsBellBtn = document.getElementById("newsBellBtn");
+  const closeNewsPopupBtn = document.getElementById("closeNewsPopupBtn");
+  const newsPopup = document.getElementById("newsPopup");
+
+  if (newsBellBtn) {
+    newsBellBtn.onclick = async () => {
+      await openNewsPopup();
+    };
+  }
+
+  if (closeNewsPopupBtn) {
+    closeNewsPopupBtn.onclick = () => {
+      if (newsPopup) newsPopup.style.display = "none";
+    };
+  }
+
+  if (newsPopup) {
+    newsPopup.onclick = (e) => {
+      if (e.target === newsPopup) {
+        newsPopup.style.display = "none";
+      }
+    };
+  }
+}
+
+async function getNewsHistory() {
+  const snap = await getDoc(doc(db, "game", "newsHistory"));
+  return snap.exists() ? snap.data().items || [] : [];
+}
+
+async function addNewsHistoryItem(newsItem) {
+  const currentHistory = await getNewsHistory();
+
+  const newItem = {
+    id: Date.now(),
+    title: newsItem.title,
+    description: newsItem.description,
+    type: newsItem.type || "info",
+    createdAt: Date.now()
+  };
+
+  const updatedHistory = [newItem, ...currentHistory].slice(0, 10);
+
+  await setDoc(doc(db, "game", "newsHistory"), {
+    items: updatedHistory
+  });
+}
 
 /* ================= BOOT ================= */
 
@@ -3080,5 +4257,6 @@ watchAuth(async (user) => {
   if (page === "crypto") await initCrypto(user);
   if (page === "investments") await initInvestments(user);
   if (page === "leaderboard") await initLeaderboard(user);
+  if (page === "missions") await initMissions(user);
   if (page === "admin") await initAdmin(user);
 });

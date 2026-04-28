@@ -13,6 +13,7 @@
     <div class="topbar">
       <h2>Admin Dashboard</h2>
       <div class="top-actions">
+        <button id="newsBellBtn" class="secondary">🔔</button>
         <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
@@ -26,13 +27,24 @@
   </div>
 
     <nav>
-        <a href="home.html">Accueil</a>
-        <a href="boutique.html">Boutique</a>
-        <a href="payments.html">Paiement</a>
-        <a href="crypto.html">Crypto</a>
-        <a href="leaderboard.html">Classement</a>
-        <a id="adminNavLink" href="admin.html" style="display:none;">Admin</a>
+      <a href="home.html"><span>🏠</span><small>Accueil</small></a>
+      <a href="boutique.html"><span>🛒</span><small>Boutique</small></a>
+      <a href="crypto.html"><span>📈</span><small>Crypto</small></a>
+      <a href="payments.html"><span>💸</span><small>Paiement</small></a>
+      <a href="mission.html"><span>🎯</span><small>Missions</small></a>
+      <a href="leaderboard.html"><span>🏆</span><small>Top</small></a>
+      <a id="adminNavLink" href="admin.html" style="display:none;"><span>🛡️</span><small>Admin</small></a>
     </nav>
+
+  <div id="newsPopup" class="news-popup" style="display:none;">
+    <div class="news-popup-content">
+      <div class="row">
+        <h3>📰 News</h3>
+        <button id="closeNewsPopupBtn" class="secondary">Fermer</button>
+      </div>
+      <div id="newsPopupContent">Chargement...</div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

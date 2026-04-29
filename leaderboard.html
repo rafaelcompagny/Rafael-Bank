@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Classement - Rafael Bank</title>
-  <link rel="shortcut icon" href="img/logo.jpg">
+  <title>Classement - Cryptex Bank</title>
+  <link rel="shortcut icon" href="img/logo.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-page="leaderboard">
@@ -12,9 +12,12 @@
     <div class="topbar">
       <div>
         <h1>Classements globaux</h1>
-        <p class="small">Les meilleurs joueurs de Rafael Bank</p>
+        <p class="small">Les meilleurs joueurs de Cryptex Bank</p>
       </div>
-      <button id="newsBellBtn" class="secondary">🔔</button>
+      <button id="newsBellBtn" class="secondary news-bell-btn">
+          🔔
+          <span id="newsUnreadDot" class="news-unread-dot" style="display:none;"></span>
+        </button>
       <button class="btn-link secondary" id="logoutBtn">Se déconnecter</button>
     </div>
 
@@ -66,6 +69,24 @@
             Rapide · Fiable · Prix compétitifs
         </p>
 
+        <div class="credits-separator"></div>
+
+        <h3>Nous Contacter</h3>
+        <p>
+          <strong>Par Mail</strong>  — 
+          <a href="mailto:rafael.compagny@gmail.com? subject=Question / remarque" target="_blank" style="color: white;">rafael.compagny@gmail.com</a>
+        </p>
+        <p>
+          <strong>Sur Instagram</strong> — 
+          <a href="https://www.instagram.com/cryptex_bank?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" target="_blank" style="color: white;">Instagram Rafaël Compagny</a>
+        </p>
+        <p class="small">
+          Réponse en moins de 24h avec réparation du problème le plus vite possible · n'hésitez pas pour toute question ou collaboration
+        </p>
+
+        <div class="credits-separator"></div>
+
+        
         <div class="credits-footer">
             <p>Hébergement Github et Vercel, avec une Data base Firestore et pout les achats Stripe</p>
             <p>© 2026 <strong>Rafael Company</strong></p>
@@ -78,7 +99,7 @@
   <nav>
     <a href="home.html"><span>🏠</span><small>Accueil</small></a>
     <a href="boutique.html"><span>🛒</span><small>Boutique</small></a>
-    <a href="crypto.html"><span>📈</span><small>Crypto</small></a>
+    <a href="marches.html"><span>📈</span><small>Marchés</small></a>
     <a href="payments.html"><span>💸</span><small>Paiement</small></a>
     <a href="mission.html"><span>🎯</span><small>Missions</small></a>
     <a href="leaderboard.html"><span>🏆</span><small>Top</small></a>
